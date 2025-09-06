@@ -25,6 +25,52 @@ Kafka Timebridge enables sophisticated delayed message scheduling in Kafka envir
 
 ## How It Works
 
+```mermaid
+graph TB
+    Producer[📱 Producer Application<br/>Schedules messages]
+    
+    subgraph "Kafka Cluster"
+        TimebridgeTopic[📨 timebridge topic]
+        UserTopic[📬 user-notifications]
+        PaymentTopic[💰 payment-reminders] 
+        SystemTopic[⚙️ system-alerts]
+    end
+    
+    subgraph "Timebridge System"
+        Daemon[🔄 kafka-timebridge daemon]
+        Backend[(🗄️ Couchbase Backend)]
+    end
+    
+    UserConsumer[👤 User Service<br/>Consumes notifications]
+    PaymentConsumer[💳 Payment Service<br/>Consumes reminders]
+    SystemConsumer[🖥️ System Monitor<br/>Consumes alerts]
+    
+    Producer -->|"Send with headers:<br/>X-Timebridge-When<br/>X-Timebridge-Where"| TimebridgeTopic
+    TimebridgeTopic -->|Consume scheduled messages| Daemon
+    Daemon -->|Store until delivery time| Backend
+    Backend -->|Read ready messages| Daemon
+    Daemon -->|"Deliver at scheduled time<br/>(no scheduling headers)"| UserTopic
+    Daemon -->|"Deliver at scheduled time<br/>(no scheduling headers)"| PaymentTopic
+    Daemon -->|"Deliver at scheduled time<br/>(no scheduling headers)"| SystemTopic
+    
+    UserTopic -->|"Consume regular messages<br/>(no time tracking needed)"| UserConsumer
+    PaymentTopic -->|"Consume regular messages<br/>(no time tracking needed)"| PaymentConsumer
+    SystemTopic -->|"Consume regular messages<br/>(no time tracking needed)"| SystemConsumer
+    
+    style Producer fill:#e1f5fe
+    style Daemon fill:#f3e5f5
+    style Backend fill:#e8f5e8
+    style TimebridgeTopic fill:#fff3e0
+    style UserTopic fill:#fff3e0
+    style PaymentTopic fill:#fff3e0
+    style SystemTopic fill:#fff3e0
+    style UserConsumer fill:#e8f5e8
+    style PaymentConsumer fill:#e8f5e8
+    style SystemConsumer fill:#e8f5e8
+```
+
+### Process Flow
+
 1. **Send**: Client sends message to timebridge topic (default: `timebridge`) with headers:
    - `X-Timebridge-When`: When to deliver (RFC3339 format, e.g., `2024-12-25T10:00:00Z`)
    - `X-Timebridge-Where`: Target topic for delivery (e.g., `user-notifications`)
@@ -40,15 +86,19 @@ Kafka Timebridge enables sophisticated delayed message scheduling in Kafka envir
 | `X-Timebridge-When` | Yes | RFC3339 timestamp | `2024-12-25T10:00:00Z` |
 | `X-Timebridge-Where` | Yes | Destination topic name | `user-notifications` |
 
-**Example Message:**
-```bash
-# Headers
-X-Timebridge-When: 2024-12-25T10:00:00Z
-X-Timebridge-Where: user-notifications
-Content-Type: application/json
+### Programmatic Example
 
-# Body
-{"userId": 123, "message": "Your subscription expires tomorrow"}
+```go
+// Example using confluent-kafka-go
+producer.Produce(&kafka.Message{
+    TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+    Headers: []kafka.Header{
+        {Key: "X-Timebridge-When", Value: []byte("2024-12-25T10:00:00Z")},
+        {Key: "X-Timebridge-Where", Value: []byte("user-notifications")},
+        {Key: "Content-Type", Value: []byte("application/json")},
+    },
+    Value: []byte(`{"userId": 123, "message": "Scheduled notification"}`),
+}, nil)
 ```
 
 ## Storage Backends
@@ -100,154 +150,9 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `COUCHBASE_USERNAME` | `--couchbase-username` | `timebridge` | Couchbase username |
 | `COUCHBASE_PASSWORD` | `--couchbase-password` | | Couchbase password |
 
-#### Couchbase Setup Example
 
-```bash
-# 1. Start Couchbase (using Docker)
-docker run -d --name couchbase \
-  -p 8091-8097:8091-8097 \
-  -p 9123:9123 \
-  -p 11207:11207 \
-  -p 11210:11210 \
-  -p 11280:11280 \
-  -p 18091-18097:18091-18097 \
-  couchbase:latest
 
-# 2. Configure Couchbase cluster via Web UI (http://localhost:8091)
-# 3. Create bucket named 'timebridge'
-# 4. Create scope named 'timebridge' within the bucket
-# 5. Create collection named 'messages' within the scope
 
-# 6. Run timebridge with Couchbase backend
-BACKEND=couchbase \
-COUCHBASE_CONNECTION_STRING=couchbase://localhost \
-COUCHBASE_USERNAME=Administrator \
-COUCHBASE_PASSWORD=password \
-./kafka-timebridge
-```
-
-## Usage Examples
-
-### Basic Usage (In-Memory)
-```bash
-# Default in-memory backend
-./kafka-timebridge
-
-# With custom Kafka settings
-KAFKA_BROKERS=broker1:9092,broker2:9092 \
-LOG_LEVEL=info \
-./kafka-timebridge
-```
-
-### Production Usage (Couchbase)
-```bash
-# Production setup with Couchbase and SASL authentication
-BACKEND=couchbase \
-KAFKA_BROKERS=prod-broker1:9092,prod-broker2:9092 \
-KAFKA_USERNAME=timebridge-user \
-KAFKA_PASSWORD=secure-password \
-KAFKA_SECURITY_PROTOCOL=SASL_SSL \
-COUCHBASE_CONNECTION_STRING=couchbases://cb1.example.com,cb2.example.com \
-COUCHBASE_USERNAME=timebridge \
-COUCHBASE_PASSWORD=cb-password \
-LOG_LEVEL=info \
-LOG_FORMAT=json \
-./kafka-timebridge
-```
-
-### CLI Flag Usage
-```bash
-# Using CLI flags (override environment variables)
-./kafka-timebridge \
-  --backend=couchbase \
-  --kafka-brokers=localhost:9092 \
-  --kafka-topic=delayed-messages \
-  --log-level=debug \
-  --couchbase-connection-string=couchbase://localhost
-```
-
-## Building and Running
-
-### Local Build
-```bash
-# Build binary
-go build -o kafka-timebridge cmd/main.go
-
-# Run with environment variables
-KAFKA_BROKERS=localhost:9092 ./kafka-timebridge
-
-# Run directly with Go
-go run cmd/main.go
-```
-
-### Docker
-
-#### Building Docker Image
-```bash
-# Build image
-docker build -t kafka-timebridge:latest .
-
-# Run with in-memory backend
-docker run --rm \
-  -e KAFKA_BROKERS=host.docker.internal:9092 \
-  kafka-timebridge:latest
-
-# Run with Couchbase backend
-docker run --rm \
-  -e BACKEND=couchbase \
-  -e KAFKA_BROKERS=host.docker.internal:9092 \
-  -e COUCHBASE_CONNECTION_STRING=couchbase://host.docker.internal \
-  -e COUCHBASE_USERNAME=Administrator \
-  -e COUCHBASE_PASSWORD=password \
-  kafka-timebridge:latest
-```
-
-#### Docker Compose Example
-```yaml
-version: '3.8'
-services:
-  timebridge:
-    build: .
-    environment:
-      - BACKEND=couchbase
-      - KAFKA_BROKERS=kafka:9092
-      - COUCHBASE_CONNECTION_STRING=couchbase://couchbase
-      - COUCHBASE_USERNAME=Administrator
-      - COUCHBASE_PASSWORD=password
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
-    depends_on:
-      - kafka
-      - couchbase
-```
-
-## Sending Test Messages
-
-### Using Kafka Console Producer
-```bash
-# Send a delayed message
-echo 'X-Timebridge-When=2024-12-25T10:00:00Z|X-Timebridge-Where=user-notifications|{"userId": 123, "message": "Test delayed message"}' | \
-kafka-console-producer.sh \
-  --topic timebridge \
-  --bootstrap-server localhost:9092 \
-  --property "parse.headers=true" \
-  --property "headers.delimiter=|" \
-  --property "headers.separator="
-```
-
-### Programmatic Example (Go)
-```go
-// Example using confluent-kafka-go
-producer.Produce(&kafka.Message{
-    TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-    Headers: []kafka.Header{
-        {Key: "X-Timebridge-When", Value: []byte("2024-12-25T10:00:00Z")},
-        {Key: "X-Timebridge-Where", Value: []byte("user-notifications")},
-        {Key: "Content-Type", Value: []byte("application/json")},
-    },
-    Value: []byte(`{"userId": 123, "message": "Scheduled notification"}`),
-}, nil)
-```
 
 ## Monitoring and Logging
 

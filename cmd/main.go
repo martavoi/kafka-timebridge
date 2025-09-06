@@ -79,7 +79,7 @@ func main() {
 			return
 		}
 
-		logger.Info("Connecting to Couchbase...")
+		logger.Debug("Connecting to Couchbase...")
 		err = cbBackend.Connect()
 		if err != nil {
 			logger.Error("Failed to connect to Couchbase", "error", err)
