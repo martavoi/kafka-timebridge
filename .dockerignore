@@ -1,0 +1,44 @@
+# Binaries
+kafka-timebridge
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+test*
+
+# Build artifacts
+.vscode/
+.idea/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+

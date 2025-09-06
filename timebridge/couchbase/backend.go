@@ -1,0 +1,152 @@
+package couchbase
+
+import (
+	"context"
+	"fmt"
+	"kafka-timebridge/timebridge"
+	"time"
+
+	"github.com/couchbase/gocb/v2"
+	"github.com/google/uuid"
+)
+
+type MessageHeader struct {
+	Key   string `json:"key"`
+	Value []byte `json:"value"`
+}
+
+type MessageDocument struct {
+	Key     []byte          `json:"key"`
+	Value   []byte          `json:"value"`
+	Headers []MessageHeader `json:"headers"`
+	When    time.Time       `json:"when"`
+	Where   string          `json:"where"`
+}
+
+type Backend struct {
+	cfg     timebridge.CouchbaseConfig
+	cluster *gocb.Cluster
+}
+
+func NewBackend(cfg timebridge.CouchbaseConfig) (*Backend, error) {
+	return &Backend{cfg: cfg}, nil
+}
+
+func (s *Backend) Connect() error {
+	cluster, err := gocb.Connect(s.cfg.ConnectionString, gocb.ClusterOptions{
+		Authenticator: gocb.PasswordAuthenticator{
+			Username: s.cfg.Username,
+			Password: s.cfg.Password.String(),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	s.cluster = cluster
+	return nil
+}
+
+func (s *Backend) Close() error {
+	return s.cluster.Close(&gocb.ClusterCloseOptions{})
+}
+
+func (s *Backend) Write(ctx context.Context, m timebridge.Message) (*timebridge.StoredMessage, error) {
+	bucket := s.cluster.Bucket(s.cfg.Bucket)
+	scope := bucket.Scope(s.cfg.Scope)
+	collection := scope.Collection(s.cfg.Collection)
+
+	headers := make([]MessageHeader, len(m.Headers))
+	for i, h := range m.Headers {
+		headers[i] = MessageHeader(h)
+	}
+	doc := MessageDocument{
+		Key:     m.Key,
+		Value:   m.Value,
+		Headers: headers,
+		When:    m.When,
+		Where:   m.Where,
+	}
+
+	key := uuid.New().String()
+
+	_, err := collection.Upsert(key, doc, &gocb.UpsertOptions{
+		Timeout: 2 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &timebridge.StoredMessage{
+		Message: m,
+		Key:     key,
+	}, nil
+}
+
+func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.StoredMessage, error) {
+	bucket := s.cluster.Bucket(s.cfg.Bucket)
+	scope := bucket.Scope(s.cfg.Scope)
+	collection := scope.Collection(s.cfg.Collection)
+
+	// Query only messages that are ready to be delivered (when <= now), ordered by when ASC (oldest first)
+	query := fmt.Sprintf("SELECT META().id, `key`, `value`, `headers`, `when`, `where` FROM `%s` WHERE `when` <= NOW_UTC() ORDER BY `when` ASC LIMIT %d", collection.Name(), limit)
+	rows, err := scope.Query(query, &gocb.QueryOptions{
+		Timeout: 3 * time.Second,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	docs := make([]timebridge.StoredMessage, 0)
+	for rows.Next() {
+		// Structure to capture both document ID and content
+		// With SELECT META().id, *, the document fields are flattened at the top level
+		var QueryResultRow struct {
+			Id      string          `json:"id"`
+			Key     []byte          `json:"key"`
+			Value   []byte          `json:"value"`
+			Headers []MessageHeader `json:"headers"`
+			When    time.Time       `json:"when"`
+			Where   string          `json:"where"`
+		}
+
+		err := rows.Row(&QueryResultRow)
+		if err != nil {
+			return nil, err
+		}
+
+		headers := make([]timebridge.Header, len(QueryResultRow.Headers))
+		for i, h := range QueryResultRow.Headers {
+			headers[i] = timebridge.Header(h)
+		}
+
+		docs = append(docs, timebridge.StoredMessage{
+			Message: timebridge.Message{
+				Key:     QueryResultRow.Key,
+				Value:   QueryResultRow.Value,
+				Headers: headers,
+				When:    QueryResultRow.When,
+				Where:   QueryResultRow.Where,
+			},
+			Key: QueryResultRow.Id,
+		})
+	}
+
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+
+	return docs, nil
+}
+
+func (s *Backend) Delete(ctx context.Context, key string) error {
+	bucket := s.cluster.Bucket(s.cfg.Bucket)
+	scope := bucket.Scope(s.cfg.Scope)
+	collection := scope.Collection(s.cfg.Collection)
+
+	_, err := collection.Remove(key, &gocb.RemoveOptions{
+		Timeout: 2 * time.Second,
+	})
+	return err
+}

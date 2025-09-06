@@ -1,0 +1,55 @@
+services:
+  broker:
+    image: apache/kafka:latest
+    hostname: broker
+    container_name: broker
+    ports:
+      - 9092:9092
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:29093
+      KAFKA_LISTENERS: PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+  couchbase:
+    image: couchbase/server:latest
+    hostname: couchbase
+    container_name: couchbase
+    ports:
+      - 8091-8097:8091-8097  # Web Admin UI, REST API, and various services
+      - 9123:9123            # Analytics service
+      - 11207:11207          # Data service (SSL)
+      - 11210:11210          # Data service (non-SSL)
+      - 11280:11280          # Data service (SSL, alternate)
+      - 18091-18097:18091-18097  # Internal services (SSL equivalents)
+    volumes:
+      - couchbase-data:/opt/couchbase/var
+      - couchbase-config:/opt/couchbase/etc/couchbase
+      - couchbase-index:/opt/couchbase/var/lib/couchbase/indexes
+      - couchbase-logs:/opt/couchbase/var/lib/couchbase/logs
+
+volumes:
+  # Kafka data (topics, messages, offsets)
+  kafka-data:
+    driver: local
+  
+  # Couchbase volumes  
+  couchbase-data:
+    driver: local
+  couchbase-config:
+    driver: local
+  couchbase-index:
+    driver: local
+  couchbase-logs:
+    driver: local
