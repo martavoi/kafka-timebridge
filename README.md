@@ -30,9 +30,9 @@ graph TB
     Producer[📱 Producer Application<br/>Schedules messages]
     
     subgraph "Kafka Cluster"
-        TimebridgeTopic[📨 timebridge topic]
-        UserTopic[📬 user-notifications]
-        PaymentTopic[💰 payment-reminders] 
+        TimebridgeTopic[📨 timebridge<br/>Kafka Topic]
+        UserTopic[📬 user-notifications<br/>Kafka Topic]
+        PaymentTopic[💰 payment-reminders<br/>Kafka Topic] 
     end
     
     subgraph "Timebridge System"
