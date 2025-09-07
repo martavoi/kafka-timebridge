@@ -2,6 +2,8 @@
 
 A lightweight, production-ready daemon for scheduling delayed Kafka message delivery. Send messages now, deliver them later - from minutes to months in advance.
 
+> **🚀 Quick Start**: `docker run --rm ghcr.io/martavoi/kafka-timebridge:latest` - [See installation guide](#installation)
+
 ## About
 
 Kafka Timebridge enables sophisticated delayed message scheduling in Kafka environments. Instead of sending messages directly to destination topics, clients send them to a timebridge topic with scheduling metadata. The daemon stores messages in configurable backends and delivers them to their destination topics at the specified time.
@@ -13,7 +15,7 @@ Kafka Timebridge enables sophisticated delayed message scheduling in Kafka envir
 - ⚙️ Configurable via environment variables and CLI flags
 - 🔒 SASL authentication support for secure Kafka clusters
 - 📊 Structured logging with configurable levels and formats
-- 🐳 Docker support with Alpine-based images
+- 🐳 **Ready-to-use Docker images** - just `docker run ghcr.io/martavoi/kafka-timebridge:latest`
 - 🔄 Graceful shutdown and error handling with exponential backoff
 
 **Use Cases:**
@@ -108,6 +110,72 @@ producer.Produce(&kafka.Message{
 - **Pros**: Persistent storage, scalable, high availability
 - **Cons**: Requires Couchbase cluster setup
 - **Configuration**: See Couchbase settings below
+
+## Installation
+
+### 🐳 Docker (Recommended)
+
+The easiest way to run kafka-timebridge is using Docker. Images are automatically built and published to GitHub Container Registry with each release.
+
+#### Quick Start
+```bash
+# Pull and run the latest version
+docker run --rm ghcr.io/martavoi/kafka-timebridge:latest
+
+# Run with custom Kafka configuration
+docker run --rm \
+  -e KAFKA_BROKERS=your-kafka:9092 \
+  -e KAFKA_TOPIC=timebridge \
+  -e BACKEND=memory \
+  ghcr.io/martavoi/kafka-timebridge:latest
+
+# Run a specific version
+docker run --rm ghcr.io/martavoi/kafka-timebridge:v1.2.3
+```
+
+#### Docker Compose Example
+```yaml
+version: '3.8'
+services:
+  kafka-timebridge:
+    image: ghcr.io/martavoi/kafka-timebridge:latest
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_TOPIC=timebridge
+      - BACKEND=memory
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
+    restart: unless-stopped
+    depends_on:
+      - kafka
+```
+
+#### Available Tags
+- `latest` - Latest stable release
+- `v1.2.3` - Specific version tags
+- All images are based on Alpine Linux for minimal size (~15MB)
+
+### 📦 Binary Releases
+
+Pre-compiled binaries are available for Linux AMD64:
+
+1. **Download** from [GitHub Releases](https://github.com/martavoi/kafka-timebridge/releases)
+2. **Extract**: `tar -xzf kafka-timebridge-linux-amd64.tar.gz`
+3. **Run**: `./kafka-timebridge-linux-amd64`
+
+### 🔧 Build from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/martavoi/kafka-timebridge.git
+cd kafka-timebridge
+
+# Build (requires Go 1.24+ and CGO enabled)
+CGO_ENABLED=1 go build -o kafka-timebridge ./cmd
+
+# Run
+./kafka-timebridge
+```
 
 ## CLI Usage
 

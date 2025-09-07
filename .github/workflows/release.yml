@@ -45,43 +45,23 @@ jobs:
         run: |
           CGO_ENABLED=1 go build -o kafka-timebridge ./cmd
 
-      - name: Run semantic-release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
-
       - name: Set up Docker Buildx
-        if: success()
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
-        if: success()
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get version
-        if: success()
-        id: version
-        run: |
-          # Get the latest tag for version (semantic-release creates the tag before this step)
-          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Using version: ${VERSION}"
-
-      - name: Build and upload binaries
-        if: success()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
+      - name: Build release binaries
         run: |
           # Create release binaries for Linux AMD64 only
           mkdir -p dist
           
           # Linux AMD64 (glibc - for Ubuntu/Debian/RHEL etc.)
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/kafka-timebridge-linux-amd64 ./cmd
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/kafka-timebridge-linux-amd64 ./cmd
           
           # Compress binaries
           cd dist
@@ -89,10 +69,40 @@ jobs:
             tar -czf "${binary}.tar.gz" "${binary}"
             rm "${binary}"
           done
+
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
+
+      - name: Get version and rebuild with version
+        if: success()
+        id: version
+        run: |
+          # Get the version from the tag semantic-release just created
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Using version: ${VERSION}"
           
-          # Upload to release if one was created
+          # Rebuild binaries with version information
+          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/kafka-timebridge-linux-amd64 ./cmd
+          
+          # Re-compress with version
+          cd dist
+          for binary in kafka-timebridge-*; do
+            tar -czf "${binary}.tar.gz" "${binary}"
+            rm "${binary}"
+          done
+
+      - name: Upload release binaries
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Upload to release
           if [ -n "$(git tag --points-at HEAD)" ]; then
-            gh release upload "${VERSION}" *.tar.gz --clobber
+            gh release upload "${VERSION}" dist/*.tar.gz --clobber
           fi
 
       - name: Build and push Docker image
@@ -108,4 +118,34 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+
+      - name: Update release notes with Docker info
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Add Docker image information to release notes
+          if [ -n "$(git tag --points-at HEAD)" ]; then
+            gh release edit "${VERSION}" --notes-file - << EOF
+          $(gh release view "${VERSION}" --json body --jq .body)
+          
+          ## 🐳 Docker Images
+          
+          Docker images are automatically built and published to GitHub Container Registry:
+          
+          - **Latest**: \`ghcr.io/${{ github.repository }}:latest\`
+          - **Tagged**: \`ghcr.io/${{ github.repository }}:${VERSION}\`
+          
+          ### Quick Start
+          \`\`\`bash
+          # Run the latest version
+          docker run --rm ghcr.io/${{ github.repository }}:latest
+          
+          # Run this specific version
+          docker run --rm ghcr.io/${{ github.repository }}:${VERSION}
+          \`\`\`
+          
+          Images are based on Alpine Linux (~15MB) and include all dependencies.
+          EOF
+          fi

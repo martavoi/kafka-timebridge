@@ -56,7 +56,10 @@
             "path": "dist/*.tar.gz",
             "label": "Release binaries"
           }
-        ]
+        ],
+        "successComment": false,
+        "releasedLabels": false,
+        "addReleases": "top"
       }
     ],
     [
