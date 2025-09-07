@@ -77,14 +77,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          # Create release binaries for Linux platforms only
+          # Create release binaries for Linux AMD64 only
           mkdir -p dist
           
           # Linux AMD64 (glibc - for Ubuntu/Debian/RHEL etc.)
           CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/kafka-timebridge-linux-amd64 ./cmd
-          
-          # Linux ARM64 (glibc)
-          CGO_ENABLED=1 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/kafka-timebridge-linux-arm64 ./cmd
           
           # Compress binaries
           cd dist
@@ -103,7 +100,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
