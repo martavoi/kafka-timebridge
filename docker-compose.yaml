@@ -39,6 +39,35 @@ services:
       - couchbase-index:/opt/couchbase/var/lib/couchbase/indexes
       - couchbase-logs:/opt/couchbase/var/lib/couchbase/logs
 
+  timebridge:
+    image: ghcr.io/martavoi/kafka-timebridge:latest
+    hostname: timebridge
+    container_name: timebridge
+    depends_on:
+      - broker
+      - couchbase
+    environment:
+      # Kafka Configuration (use container names, not localhost)
+      KAFKA_BROKERS: broker:29092
+      KAFKA_TOPIC: timebridge
+      KAFKA_GROUP_ID: timebridge
+      
+      # Backend Configuration
+      BACKEND: couchbase
+      
+      # Couchbase Configuration (use container name, not localhost)
+      COUCHBASE_CONNECTION_STRING: couchbase://couchbase
+      COUCHBASE_BUCKET: timebridge
+      COUCHBASE_SCOPE: timebridge
+      COUCHBASE_COLLECTION: messages
+      COUCHBASE_USERNAME: timebridge
+      COUCHBASE_PASSWORD: 123456
+      
+      # Logging Configuration
+      LOG_LEVEL: info
+      LOG_FORMAT: text
+    restart: unless-stopped
+
 volumes:
   # Kafka data (topics, messages, offsets)
   kafka-data:
