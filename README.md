@@ -33,7 +33,6 @@ graph TB
         TimebridgeTopic[📨 timebridge topic]
         UserTopic[📬 user-notifications]
         PaymentTopic[💰 payment-reminders] 
-        SystemTopic[⚙️ system-alerts]
     end
     
     subgraph "Timebridge System"
@@ -43,7 +42,6 @@ graph TB
     
     UserConsumer[👤 User Service<br/>Consumes notifications]
     PaymentConsumer[💳 Payment Service<br/>Consumes reminders]
-    SystemConsumer[🖥️ System Monitor<br/>Consumes alerts]
     
     Producer -->|"Send with headers:<br/>X-Timebridge-When<br/>X-Timebridge-Where"| TimebridgeTopic
     TimebridgeTopic -->|Consume scheduled messages| Daemon
@@ -51,11 +49,9 @@ graph TB
     Backend -->|Read ready messages| Daemon
     Daemon -->|"Deliver at scheduled time<br/>(no scheduling headers)"| UserTopic
     Daemon -->|"Deliver at scheduled time<br/>(no scheduling headers)"| PaymentTopic
-    Daemon -->|"Deliver at scheduled time<br/>(no scheduling headers)"| SystemTopic
     
     UserTopic -->|"Consume regular messages<br/>(no time tracking needed)"| UserConsumer
     PaymentTopic -->|"Consume regular messages<br/>(no time tracking needed)"| PaymentConsumer
-    SystemTopic -->|"Consume regular messages<br/>(no time tracking needed)"| SystemConsumer
     
     style Producer fill:#e1f5fe
     style Daemon fill:#f3e5f5
@@ -63,10 +59,8 @@ graph TB
     style TimebridgeTopic fill:#fff3e0
     style UserTopic fill:#fff3e0
     style PaymentTopic fill:#fff3e0
-    style SystemTopic fill:#fff3e0
     style UserConsumer fill:#e8f5e8
     style PaymentConsumer fill:#e8f5e8
-    style SystemConsumer fill:#e8f5e8
 ```
 
 ### Process Flow
