@@ -109,6 +109,51 @@ producer.Produce(&kafka.Message{
 - **Cons**: Requires Couchbase cluster setup
 - **Configuration**: See Couchbase settings below
 
+## CLI Usage
+
+kafka-timebridge provides a simple command-line interface with the following commands:
+
+```bash
+# Start the timebridge daemon (default behavior)
+kafka-timebridge
+
+# Display version information
+kafka-timebridge version
+
+# Show help and available commands
+kafka-timebridge help
+```
+
+### Examples
+
+```bash
+# Start with default configuration
+kafka-timebridge
+
+# Check the version
+$ kafka-timebridge version
+kafka-timebridge version v1.2.3
+
+# Get help
+$ kafka-timebridge help
+kafka-timebridge is a service that accepts Kafka messages with future delivery times
+and schedules them for re-delivery at the specified time. It supports multiple storage
+backends including in-memory and Couchbase for persistence.
+
+Usage:
+  kafka-timebridge [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  version     Print the version number
+
+Flags:
+  -h, --help   help for kafka-timebridge
+
+Use "kafka-timebridge [command] --help" for more information about a command.
+```
+
 ## Configuration
 
 Configure via environment variables or CLI flags. CLI flags override environment variables.

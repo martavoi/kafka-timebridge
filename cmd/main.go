@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"kafka-timebridge/timebridge"
 	"kafka-timebridge/timebridge/couchbase"
 	"kafka-timebridge/timebridge/memory"
@@ -13,9 +14,40 @@ import (
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/spf13/cobra"
 )
 
+// version is set at build time via -ldflags "-X main.version=..."
+var version = "dev"
+
+var rootCmd = &cobra.Command{
+	Use:   "kafka-timebridge",
+	Short: "A time-delayed message bridge for Apache Kafka",
+	Long: `kafka-timebridge is a service that accepts Kafka messages with future delivery times
+and schedules them for re-delivery at the specified time. It supports multiple storage
+backends including in-memory and Couchbase for persistence.`,
+	Run: runMain,
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the version number",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Printf("kafka-timebridge version %s\n", version)
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(versionCmd)
+}
+
 func main() {
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func runMain(cmd *cobra.Command, args []string) {
 
 	cfg := timebridge.Config{}
 	if err := cfg.Load(); err != nil {

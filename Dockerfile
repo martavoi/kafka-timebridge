@@ -16,8 +16,11 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application with musl tag
-RUN go build -tags musl -ldflags '-extldflags "-static"' -o kafka-timebridge ./cmd
+# Accept version as build argument
+ARG VERSION=dev
+
+# Build the application with musl tag and version
+RUN go build -tags musl -ldflags "-extldflags '-static' -s -w -X main.version=${VERSION}" -o kafka-timebridge ./cmd
 
 # Final stage
 FROM alpine:latest
