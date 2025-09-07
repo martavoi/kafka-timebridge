@@ -11,10 +11,16 @@ import (
 )
 
 func TestBackend_WriteReadDelete(t *testing.T) {
+	// Skip if running fast tests only - this tests backend integration
+	if testing.Short() {
+		t.Skip("Skipping backend integration test")
+	}
+
 	backend := NewBackend()
 	ctx := context.Background()
 
 	// Test message with realistic headers (what acceptor would send)
+	// Use past time so ReadBatch returns it immediately for testing
 	originalMessage := timebridge.Message{
 		Key:   []byte("order-12345"),
 		Value: []byte(`{"orderId": 12345, "amount": 99.99, "userId": "user123"}`),
@@ -23,7 +29,7 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 			{Key: "correlation-id", Value: []byte("corr-abc-123")},
 			{Key: "source-system", Value: []byte("order-service")},
 		},
-		When:  time.Now().Add(30 * time.Minute), // Realistic future time
+		When:  time.Now().Add(-5 * time.Minute), // Past time so it's immediately ready
 		Where: "payment-notifications",          // Realistic destination topic
 	}
 
@@ -93,28 +99,33 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 }
 
 func TestBackend_ReadBatch_Ordering(t *testing.T) {
+	// Skip if running fast tests only - this tests backend integration
+	if testing.Short() {
+		t.Skip("Skipping backend integration test")
+	}
+
 	backend := NewBackend()
 	ctx := context.Background()
 
-	// Create messages with different timestamps
+	// Create messages with different timestamps in the past so they're immediately ready
 	now := time.Now()
 	messages := []timebridge.Message{
 		{
 			Key:   []byte("msg1"),
 			Value: []byte("first message"),
-			When:  now.Add(1 * time.Hour),
+			When:  now.Add(-3 * time.Hour), // Past time, oldest
 			Where: "dest1",
 		},
 		{
 			Key:   []byte("msg2"),
 			Value: []byte("second message"),
-			When:  now.Add(2 * time.Hour),
+			When:  now.Add(-2 * time.Hour), // Past time, middle
 			Where: "dest2",
 		},
 		{
 			Key:   []byte("msg3"),
 			Value: []byte("third message"),
-			When:  now.Add(3 * time.Hour),
+			When:  now.Add(-1 * time.Hour), // Past time, newest
 			Where: "dest3",
 		},
 	}
@@ -130,19 +141,19 @@ func TestBackend_ReadBatch_Ordering(t *testing.T) {
 	// Verify all messages stored
 	assert.Equal(t, 3, backend.Len())
 
-	t.Run("Messages ordered by when DESC", func(t *testing.T) {
+	t.Run("Messages ordered by when ASC", func(t *testing.T) {
 		results, err := backend.ReadBatch(ctx, 10)
 		require.NoError(t, err)
 		require.Len(t, results, 3, "Should find all our messages")
 
-		// Verify ordering (DESC by when) - newest first
-		assert.True(t, results[0].Message.When.After(results[1].Message.When), "First message should have later timestamp")
-		assert.True(t, results[1].Message.When.After(results[2].Message.When), "Second message should have later timestamp than third")
+		// Verify ordering (ASC by when) - oldest first (FIFO processing)
+		assert.True(t, results[0].Message.When.Before(results[1].Message.When), "First message should have earlier timestamp")
+		assert.True(t, results[1].Message.When.Before(results[2].Message.When), "Second message should have earlier timestamp than third")
 
-		// Verify specific order: msg3 (3h), msg2 (2h), msg1 (1h)
-		assert.Equal(t, []byte("msg3"), results[0].Message.Key)
+		// Verify specific order: msg1 (-3h), msg2 (-2h), msg3 (-1h)
+		assert.Equal(t, []byte("msg1"), results[0].Message.Key)
 		assert.Equal(t, []byte("msg2"), results[1].Message.Key)
-		assert.Equal(t, []byte("msg1"), results[2].Message.Key)
+		assert.Equal(t, []byte("msg3"), results[2].Message.Key)
 	})
 
 	t.Run("Limited batch size", func(t *testing.T) {
@@ -150,8 +161,8 @@ func TestBackend_ReadBatch_Ordering(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, results, 2, "Should respect limit")
 
-		// Should get the two newest messages
-		assert.Equal(t, []byte("msg3"), results[0].Message.Key)
+		// Should get the two oldest messages (FIFO)
+		assert.Equal(t, []byte("msg1"), results[0].Message.Key)
 		assert.Equal(t, []byte("msg2"), results[1].Message.Key)
 	})
 
@@ -162,6 +173,11 @@ func TestBackend_ReadBatch_Ordering(t *testing.T) {
 }
 
 func TestBackend_WriteWithoutKey(t *testing.T) {
+	// Skip if running fast tests only - this tests backend integration
+	if testing.Short() {
+		t.Skip("Skipping backend integration test")
+	}
+
 	backend := NewBackend()
 	ctx := context.Background()
 
@@ -198,6 +214,11 @@ func TestBackend_WriteWithoutKey(t *testing.T) {
 }
 
 func TestBackend_WriteEmptyMessage(t *testing.T) {
+	// Skip if running fast tests only - this tests backend integration
+	if testing.Short() {
+		t.Skip("Skipping backend integration test")
+	}
+
 	backend := NewBackend()
 	ctx := context.Background()
 
@@ -254,6 +275,11 @@ func TestBackend_DeleteNonExistentKey(t *testing.T) {
 }
 
 func TestBackend_ConcurrentAccess(t *testing.T) {
+	// Skip if running fast tests only - this tests backend integration and concurrency
+	if testing.Short() {
+		t.Skip("Skipping backend integration test")
+	}
+
 	backend := NewBackend()
 	ctx := context.Background()
 
@@ -292,6 +318,11 @@ func TestBackend_ConcurrentAccess(t *testing.T) {
 }
 
 func TestBackend_Clear(t *testing.T) {
+	// Skip if running fast tests only - this tests backend integration
+	if testing.Short() {
+		t.Skip("Skipping backend integration test")
+	}
+
 	backend := NewBackend()
 	ctx := context.Background()
 

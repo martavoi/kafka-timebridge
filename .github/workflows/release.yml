@@ -31,7 +31,12 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
 
       - name: Run tests
         run: go test -short ./...
