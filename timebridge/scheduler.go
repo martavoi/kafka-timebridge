@@ -134,11 +134,8 @@ func (s *Scheduler) Run(ctx context.Context) error {
 								failedCount++
 							} else {
 								deliveredCount++
-								s.logger.Debug("Message delivered and cleaned up",
-									"delivered", deliveredCount,
-									"failed", failedCount,
-									"progress", processedCount,
-									"total", producedCount)
+								s.logger.Info("Message delivered",
+									"backend_key", backendKey)
 							}
 						}
 					case kafka.Error:
@@ -154,7 +151,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 				}
 			}
 
-			s.logger.Info("Produced batch of messages",
+			s.logger.Debug("Delivered batch of messages",
 				"delivered", deliveredCount,
 				"failed", failedCount,
 				"total", producedCount)
