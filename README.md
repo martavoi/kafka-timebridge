@@ -94,12 +94,15 @@ docker run --rm \
 
 ```mermaid
 graph TB
-    Producer[📱 Producer Application<br/>Schedules messages]
+    FailedConsumer[❌ Failed Consumer<br/>Processing error]
+    SubscriptionService[📅 Subscription Service<br/>Renewal logic]
+    WelcomeService[👋 User Registration<br/>Welcome flow]
     
     subgraph "Kafka Cluster"
         TimebridgeTopic[📨 timebridge<br/>Kafka Topic]
-        UserTopic[📬 user-notifications<br/>Kafka Topic]
-        PaymentTopic[💰 payment-reminders<br/>Kafka Topic] 
+        OrdersTopic[🛒 orders<br/>Topic]
+        NotificationsTopic[📬 notifications<br/>Topic]
+        EmailsTopic[📧 emails<br/>Topic]
     end
     
     subgraph "Timebridge System"
@@ -107,27 +110,38 @@ graph TB
         Backend[(🗄️ Couchbase Backend)]
     end
     
-    UserConsumer[👤 User Service<br/>Consumes notifications]
-    PaymentConsumer[💳 Payment Service<br/>Consumes reminders]
+    RetryConsumer[🔄 Order Consumer<br/>Retry processing]
+    NotificationConsumer[🔔 Notification Service<br/>Send alerts]
+    EmailConsumer[📨 Email Service<br/>Send emails]
     
-    Producer -->|"Send with headers:<br/>X-Timebridge-When<br/>X-Timebridge-Where"| TimebridgeTopic
+    FailedConsumer -->|"Retry in 1 hour<br/>X-Timebridge-When: +1h<br/>X-Timebridge-Where: orders"| TimebridgeTopic
+    SubscriptionService -->|"Alert before expiry<br/>X-Timebridge-When: expiry-7d<br/>X-Timebridge-Where: notifications"| TimebridgeTopic
+    WelcomeService -->|"Welcome email in 24h<br/>X-Timebridge-When: +24h<br/>X-Timebridge-Where: emails"| TimebridgeTopic
+    
     TimebridgeTopic -->|Consume scheduled messages| Daemon
     Daemon -->|Store until delivery time| Backend
     Backend -->|Read ready messages| Daemon
-    Daemon -->|"Deliver at scheduled time<br/>(no scheduling headers)"| UserTopic
-    Daemon -->|"Deliver at scheduled time<br/>(no scheduling headers)"| PaymentTopic
     
-    UserTopic -->|"Consume regular messages<br/>(no time tracking needed)"| UserConsumer
-    PaymentTopic -->|"Consume regular messages<br/>(no time tracking needed)"| PaymentConsumer
+    Daemon -->|"Retry failed order<br/>(scheduled time reached)"| OrdersTopic
+    Daemon -->|"Send renewal reminder<br/>(7 days before expiry)"| NotificationsTopic
+    Daemon -->|"Send welcome email<br/>(24 hours after signup)"| EmailsTopic
     
-    style Producer fill:#e1f5fe
+    OrdersTopic -->|Process retried message| RetryConsumer
+    NotificationsTopic -->|Send subscription alert| NotificationConsumer
+    EmailsTopic -->|Send welcome email| EmailConsumer
+    
+    style FailedConsumer fill:#ffebee
+    style SubscriptionService fill:#e8f5e8
+    style WelcomeService fill:#e3f2fd
     style Daemon fill:#f3e5f5
     style Backend fill:#e8f5e8
     style TimebridgeTopic fill:#fff3e0
-    style UserTopic fill:#fff3e0
-    style PaymentTopic fill:#fff3e0
-    style UserConsumer fill:#e8f5e8
-    style PaymentConsumer fill:#e8f5e8
+    style OrdersTopic fill:#fff3e0
+    style NotificationsTopic fill:#fff3e0
+    style EmailsTopic fill:#fff3e0
+    style RetryConsumer fill:#e8f5e8
+    style NotificationConsumer fill:#e8f5e8
+    style EmailConsumer fill:#e8f5e8
 ```
 
 ### Process Flow
