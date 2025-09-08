@@ -13,10 +13,11 @@ type Scheduler struct {
 	logger   *slog.Logger
 	backend  Backend
 	producer *kafka.Producer
+	config   SchedulerConfig
 }
 
-func NewScheduler(logger *slog.Logger, backend Backend, producer *kafka.Producer) *Scheduler {
-	return &Scheduler{logger: logger, backend: backend, producer: producer}
+func NewScheduler(logger *slog.Logger, backend Backend, producer *kafka.Producer, config SchedulerConfig) *Scheduler {
+	return &Scheduler{logger: logger, backend: backend, producer: producer, config: config}
 }
 
 func (s *Scheduler) Run(ctx context.Context) error {
@@ -27,7 +28,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			run = false
 		default:
-			const maxBatchSize = 100
+			maxBatchSize := s.config.MaxBatchSize
 			readOp := func() ([]StoredMessage, error) {
 				batch, err := s.backend.ReadBatch(ctx, maxBatchSize)
 				if err != nil {
@@ -53,7 +54,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 
 			if len(batch) == 0 {
 				s.logger.Debug("No messages to schedule", "next_retry", 5*time.Second)
-				<-time.After(5 * time.Second)
+				<-time.After(time.Duration(s.config.PollIntervalSeconds) * time.Second)
 				continue
 			}
 

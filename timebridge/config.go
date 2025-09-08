@@ -3,7 +3,7 @@ package timebridge
 import (
 	"log/slog"
 
-	"github.com/spf13/pflag"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -11,47 +11,33 @@ type Config struct {
 	Backend   string          `mapstructure:"backend"`
 	Kafka     KafkaConfig     `mapstructure:"kafka,"`
 	Couchbase CouchbaseConfig `mapstructure:"couchbase,"`
+	Scheduler SchedulerConfig `mapstructure:"scheduler,"`
 	LogLevel  string          `mapstructure:"log_level"`
 	LogFormat string          `mapstructure:"log_format"`
 }
 
-func (c *Config) Load() error {
-	// Define CLI flags
-	pflag.String("backend", "", "Backend type (memory, couchbase)")
-	pflag.String("kafka-brokers", "", "Kafka broker addresses")
-	pflag.String("kafka-topic", "", "Kafka topic name")
-	pflag.String("kafka-group-id", "", "Kafka consumer group ID")
-	pflag.String("kafka-username", "", "Kafka username")
-	pflag.String("kafka-password", "", "Kafka password")
-	pflag.String("kafka-security-protocol", "", "Kafka security protocol (PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL)")
-	pflag.String("kafka-sasl-mechanism", "", "Kafka SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)")
-	pflag.String("log-level", "", "Log level (debug, info, warn, error, fatal)")
-	pflag.String("log-format", "", "Log format (text, json)")
-	pflag.String("couchbase-bucket", "", "Couchbase bucket name")
-	pflag.String("couchbase-scope", "", "Couchbase scope name")
-	pflag.String("couchbase-collection", "", "Couchbase collection name")
-	pflag.String("couchbase-username", "", "Couchbase username")
-	pflag.String("couchbase-password", "", "Couchbase password")
-	pflag.String("couchbase-connection-string", "", "Couchbase connection string")
-	pflag.Parse()
-
-	// Bind CLI flags to viper keys
-	viper.BindPFlag("backend", pflag.Lookup("backend"))
-	viper.BindPFlag("kafka.brokers", pflag.Lookup("kafka-brokers"))
-	viper.BindPFlag("kafka.topic", pflag.Lookup("kafka-topic"))
-	viper.BindPFlag("kafka.group_id", pflag.Lookup("kafka-group-id"))
-	viper.BindPFlag("kafka.username", pflag.Lookup("kafka-username"))
-	viper.BindPFlag("kafka.password", pflag.Lookup("kafka-password"))
-	viper.BindPFlag("kafka.securityprotocol", pflag.Lookup("kafka-security-protocol"))
-	viper.BindPFlag("kafka.saslmechanism", pflag.Lookup("kafka-sasl-mechanism"))
-	viper.BindPFlag("log_level", pflag.Lookup("log-level"))
-	viper.BindPFlag("log_format", pflag.Lookup("log-format"))
-	viper.BindPFlag("couchbase.bucket", pflag.Lookup("couchbase-bucket"))
-	viper.BindPFlag("couchbase.scope", pflag.Lookup("couchbase-scope"))
-	viper.BindPFlag("couchbase.collection", pflag.Lookup("couchbase-collection"))
-	viper.BindPFlag("couchbase.username", pflag.Lookup("couchbase-username"))
-	viper.BindPFlag("couchbase.password", pflag.Lookup("couchbase-password"))
-	viper.BindPFlag("couchbase.connection_string", pflag.Lookup("couchbase-connection-string"))
+func (c *Config) Load(cmd *cobra.Command) error {
+	// Bind Cobra flags to viper keys (if command provided)
+	if cmd != nil {
+		viper.BindPFlag("backend", cmd.Flags().Lookup("backend"))
+		viper.BindPFlag("kafka.brokers", cmd.Flags().Lookup("kafka-brokers"))
+		viper.BindPFlag("kafka.topic", cmd.Flags().Lookup("kafka-topic"))
+		viper.BindPFlag("kafka.group_id", cmd.Flags().Lookup("kafka-group-id"))
+		viper.BindPFlag("kafka.username", cmd.Flags().Lookup("kafka-username"))
+		viper.BindPFlag("kafka.password", cmd.Flags().Lookup("kafka-password"))
+		viper.BindPFlag("kafka.securityprotocol", cmd.Flags().Lookup("kafka-security-protocol"))
+		viper.BindPFlag("kafka.saslmechanism", cmd.Flags().Lookup("kafka-sasl-mechanism"))
+		viper.BindPFlag("log_level", cmd.Flags().Lookup("log-level"))
+		viper.BindPFlag("log_format", cmd.Flags().Lookup("log-format"))
+		viper.BindPFlag("couchbase.bucket", cmd.Flags().Lookup("couchbase-bucket"))
+		viper.BindPFlag("couchbase.scope", cmd.Flags().Lookup("couchbase-scope"))
+		viper.BindPFlag("couchbase.collection", cmd.Flags().Lookup("couchbase-collection"))
+		viper.BindPFlag("couchbase.username", cmd.Flags().Lookup("couchbase-username"))
+		viper.BindPFlag("couchbase.password", cmd.Flags().Lookup("couchbase-password"))
+		viper.BindPFlag("couchbase.connection_string", cmd.Flags().Lookup("couchbase-connection-string"))
+		viper.BindPFlag("scheduler.max_batch_size", cmd.Flags().Lookup("scheduler-max-batch-size"))
+		viper.BindPFlag("scheduler.poll_interval_seconds", cmd.Flags().Lookup("scheduler-poll-interval-seconds"))
+	}
 
 	// Bind environment variables
 	viper.BindEnv("backend", "BACKEND")
@@ -70,22 +56,27 @@ func (c *Config) Load() error {
 	viper.BindEnv("couchbase.username", "COUCHBASE_USERNAME")
 	viper.BindEnv("couchbase.password", "COUCHBASE_PASSWORD")
 	viper.BindEnv("couchbase.connectionString", "COUCHBASE_CONNECTION_STRING")
+	viper.BindEnv("scheduler.max_batch_size", "SCHEDULER_MAX_BATCH_SIZE")
+	viper.BindEnv("scheduler.poll_interval_seconds", "SCHEDULER_POLL_INTERVAL_SECONDS")
 
 	// Set defaults
 	viper.SetDefault("backend", BackendMemory)
-	viper.SetDefault("log_level", "debug")
+	viper.SetDefault("log_level", "info")
 	viper.SetDefault("log_format", "text")
 	viper.SetDefault("kafka.brokers", "localhost:9092")
 	viper.SetDefault("kafka.topic", "timebridge")
 	viper.SetDefault("kafka.groupid", "timebridge")
-	viper.SetDefault("kafka.securityprotocol", "SASL_PLAINTEXT")
-	viper.SetDefault("kafka.saslmechanism", "PLAIN")
+	viper.SetDefault("kafka.securityprotocol", "PLAINTEXT")
+	viper.SetDefault("kafka.saslmechanism", "")
 	// Couchbase defaults - only used when backend is "couchbase"
 	viper.SetDefault("couchbase.bucket", "timebridge")
 	viper.SetDefault("couchbase.scope", "timebridge")
 	viper.SetDefault("couchbase.collection", "messages")
 	viper.SetDefault("couchbase.username", "timebridge")
 	viper.SetDefault("couchbase.connectionString", "couchbase://localhost")
+	// Scheduler defaults
+	viper.SetDefault("scheduler.max_batch_size", 100)
+	viper.SetDefault("scheduler.poll_interval_seconds", 5)
 
 	return viper.Unmarshal(c)
 }
@@ -121,4 +112,9 @@ type CouchbaseConfig struct {
 	Username         string       `validate:"omitempty"`
 	Password         SecretString `validate:"omitempty"`
 	ConnectionString string       `validate:"omitempty"`
+}
+
+type SchedulerConfig struct {
+	MaxBatchSize        int `mapstructure:"max_batch_size"`
+	PollIntervalSeconds int `mapstructure:"poll_interval_seconds"`
 }

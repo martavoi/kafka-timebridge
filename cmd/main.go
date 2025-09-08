@@ -39,6 +39,26 @@ var versionCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(versionCmd)
+
+	// Add configuration flags to root command
+	rootCmd.PersistentFlags().String("backend", "memory", "Backend type (memory, couchbase)")
+	rootCmd.PersistentFlags().String("kafka-brokers", "localhost:9092", "Kafka broker addresses")
+	rootCmd.PersistentFlags().String("kafka-topic", "timebridge", "Kafka topic name")
+	rootCmd.PersistentFlags().String("kafka-group-id", "timebridge", "Kafka consumer group ID")
+	rootCmd.PersistentFlags().String("kafka-username", "", "Kafka username")
+	rootCmd.PersistentFlags().String("kafka-password", "", "Kafka password")
+	rootCmd.PersistentFlags().String("kafka-security-protocol", "PLAINTEXT", "Kafka security protocol (PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL)")
+	rootCmd.PersistentFlags().String("kafka-sasl-mechanism", "", "Kafka SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)")
+	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error, fatal)")
+	rootCmd.PersistentFlags().String("log-format", "text", "Log format (text, json)")
+	rootCmd.PersistentFlags().String("couchbase-bucket", "timebridge", "Couchbase bucket name")
+	rootCmd.PersistentFlags().String("couchbase-scope", "timebridge", "Couchbase scope name")
+	rootCmd.PersistentFlags().String("couchbase-collection", "messages", "Couchbase collection name")
+	rootCmd.PersistentFlags().String("couchbase-username", "timebridge", "Couchbase username")
+	rootCmd.PersistentFlags().String("couchbase-password", "", "Couchbase password")
+	rootCmd.PersistentFlags().String("couchbase-connection-string", "couchbase://localhost", "Couchbase connection string")
+	rootCmd.PersistentFlags().Int("scheduler-max-batch-size", 100, "Maximum number of messages to process in one batch")
+	rootCmd.PersistentFlags().Int("scheduler-poll-interval-seconds", 5, "Polling interval in seconds for checking scheduled messages")
 }
 
 func main() {
@@ -50,7 +70,7 @@ func main() {
 func runMain(cmd *cobra.Command, args []string) {
 
 	cfg := timebridge.Config{}
-	if err := cfg.Load(); err != nil {
+	if err := cfg.Load(cmd); err != nil {
 		log.Fatal("Failed to load config:", err)
 	}
 
@@ -184,7 +204,7 @@ func runMain(cmd *cobra.Command, args []string) {
 	}
 	defer producer.Close()
 
-	scheduler := timebridge.NewScheduler(logger, backend, producer)
+	scheduler := timebridge.NewScheduler(logger, backend, producer, cfg.Scheduler)
 
 	schedulerCtx, schedulerCancel := context.WithCancel(context.Background())
 	defer schedulerCancel()

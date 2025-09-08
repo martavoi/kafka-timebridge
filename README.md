@@ -231,7 +231,7 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | Environment Variable | CLI Flag | Default | Description |
 |---------------------|----------|---------|-------------|
 | `BACKEND` | `--backend` | `memory` | Storage backend (`memory`, `couchbase`) |
-| `LOG_LEVEL` | `--log-level` | `debug` | Log level (`debug`, `info`, `warn`, `error`) |
+| `LOG_LEVEL` | `--log-level` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | `LOG_FORMAT` | `--log-format` | `text` | Log format (`text`, `json`) |
 
 ### Kafka Settings
@@ -243,8 +243,8 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `KAFKA_GROUP_ID` | `--kafka-group-id` | `timebridge` | Consumer group ID |
 | `KAFKA_USERNAME` | `--kafka-username` | | SASL username (optional) |
 | `KAFKA_PASSWORD` | `--kafka-password` | | SASL password (optional) |
-| `KAFKA_SECURITY_PROTOCOL` | `--kafka-security-protocol` | `SASL_PLAINTEXT` | Security protocol |
-| `KAFKA_SASL_MECHANISM` | `--kafka-sasl-mechanism` | `PLAIN` | SASL mechanism |
+| `KAFKA_SECURITY_PROTOCOL` | `--kafka-security-protocol` | `PLAINTEXT` | Security protocol |
+| `KAFKA_SASL_MECHANISM` | `--kafka-sasl-mechanism` | | SASL mechanism (only needed for SASL protocols) |
 
 ### Couchbase Settings
 
@@ -256,6 +256,13 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `COUCHBASE_COLLECTION` | `--couchbase-collection` | `messages` | Collection for storing messages |
 | `COUCHBASE_USERNAME` | `--couchbase-username` | `timebridge` | Couchbase username |
 | `COUCHBASE_PASSWORD` | `--couchbase-password` | | Couchbase password |
+
+### Scheduler Settings
+
+| Environment Variable | CLI Flag | Default | Description |
+|---------------------|----------|---------|-------------|
+| `SCHEDULER_MAX_BATCH_SIZE` | `--scheduler-max-batch-size` | `100` | Maximum number of messages to process in one batch |
+| `SCHEDULER_POLL_INTERVAL_SECONDS` | `--scheduler-poll-interval-seconds` | `5` | Polling interval in seconds for checking scheduled messages |
 
 
 
