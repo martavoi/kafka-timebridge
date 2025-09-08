@@ -130,22 +130,8 @@ jobs:
             gh release edit "${VERSION}" --notes-file - << EOF
           $(gh release view "${VERSION}" --json body --jq .body)
           
-          ## 🐳 Docker Images
+          ## 🐳 Docker Image
           
-          Docker images are automatically built and published to GitHub Container Registry:
-          
-          - **Latest**: \`ghcr.io/${{ github.repository }}:latest\`
-          - **Tagged**: \`ghcr.io/${{ github.repository }}:${VERSION}\`
-          
-          ### Quick Start
-          \`\`\`bash
-          # Run the latest version
-          docker run --rm ghcr.io/${{ github.repository }}:latest
-          
-          # Run this specific version
-          docker run --rm ghcr.io/${{ github.repository }}:${VERSION}
-          \`\`\`
-          
-          Images are based on Alpine Linux (~15MB) and include all dependencies.
+          \`ghcr.io/${{ github.repository }}:${VERSION}\`
           EOF
           fi

@@ -2,7 +2,31 @@
 
 A lightweight, production-ready daemon for scheduling delayed Kafka message delivery. Send messages now, deliver them later - from minutes to months in advance.
 
-> **🚀 Quick Start**: `docker run --rm ghcr.io/martavoi/kafka-timebridge:latest` - [See installation guide](#installation)
+## Table of Contents
+
+- [About](#about)
+- [🚀 Quick Start](#-quick-start)
+  - [🐳 Docker (Recommended)](#-docker-recommended)
+  - [Available Images](#available-images)
+- [How It Works](#how-it-works)
+  - [Process Flow](#process-flow)
+  - [Message Headers](#message-headers)
+- [Storage Backends](#storage-backends)
+  - [In-Memory Backend (Default)](#in-memory-backend-default)
+  - [Couchbase Backend (Recommended for Production)](#couchbase-backend-recommended-for-production)
+- [Configuration](#configuration)
+  - [Core Settings](#core-settings)
+  - [Kafka Settings](#kafka-settings)
+  - [Couchbase Settings](#couchbase-settings)
+  - [Scheduler Settings](#scheduler-settings)
+- [Monitoring and Logging](#monitoring-and-logging)
+  - [Example: Daemon Startup and Operation](#example-daemon-startup-and-operation)
+  - [Key Log Events](#key-log-events)
+- [CLI](#cli)
+  - [📦 Binary Releases](#-binary-releases)
+  - [🔧 Build from Source](#-build-from-source)
+  - [Commands](#commands)
+  - [CLI Examples](#cli-examples)
 
 ## About
 
@@ -10,20 +34,61 @@ Kafka Timebridge enables sophisticated delayed message scheduling in Kafka envir
 
 **Key Features:**
 - ⏰ Schedule message delivery from minutes to months in advance
+- 🛡️ **Highly durable** - with persistent backends like Couchbase and retry policies, messages won't be lost
 - 🗄️ Multiple storage backends: in-memory (default) and Couchbase
 - 🔧 Simple header-based scheduling interface
-- ⚙️ Configurable via environment variables and CLI flags
+- ⚙️ **Flexible configuration** via environment variables and CLI flags
 - 🔒 SASL authentication support for secure Kafka clusters
-- 📊 Structured logging with configurable levels and formats
-- 🐳 **Ready-to-use Docker images** - just `docker run ghcr.io/martavoi/kafka-timebridge:latest`
-- 🔄 Graceful shutdown and error handling with exponential backoff
+- 🐳 **Production-ready Docker images** - Alpine-based (~15MB), secure, and cloud-native optimized
+- 🔄 Graceful shutdown and error handling
 
 **Use Cases:**
-- Payment reminders and notifications
-- Subscription renewals and expiration alerts
-- Follow-up emails and marketing campaigns
-- System maintenance notifications
-- Any time-delayed workflow automation
+- **Message retry policies** - Schedule failed messages for retry in an hour (e.g., consumer failures)
+- **Subscription renewals and expiration alerts** - Notify users before their subscription expires
+- **Payment reminders** - Send payment due notifications at specific intervals
+- **Scheduled notifications** - Send welcome emails 24 hours after user registration
+- **System maintenance notifications** - Alert users about planned maintenance windows
+- **Any time-delayed workflow automation**
+
+## 🚀 Quick Start
+
+### 🐳 Docker (Recommended)
+
+The easiest way to run kafka-timebridge is using Docker. Images are automatically built and published to GitHub Container Registry with each release.
+
+```bash
+# Run with default settings (in-memory backend)
+docker run --rm ghcr.io/martavoi/kafka-timebridge:latest
+
+# Run with Couchbase backend and custom configuration
+docker run --rm \
+  -e KAFKA_BROKERS=your-kafka:9092 \
+  -e KAFKA_TOPIC=timebridge \
+  -e KAFKA_GROUP_ID=timebridge \
+  -e KAFKA_USERNAME=your-user \
+  -e KAFKA_PASSWORD=your-password \
+  -e KAFKA_SECURITY_PROTOCOL=SASL_SSL \
+  -e KAFKA_SASL_MECHANISM=PLAIN \
+  -e BACKEND=couchbase \
+  -e COUCHBASE_CONNECTION_STRING=couchbase://your-cluster \
+  -e COUCHBASE_BUCKET=timebridge \
+  -e COUCHBASE_SCOPE=timebridge \
+  -e COUCHBASE_COLLECTION=messages \
+  -e COUCHBASE_USERNAME=timebridge \
+  -e COUCHBASE_PASSWORD=your-couchbase-password \
+  -e COUCHBASE_UPSERT_TIMEOUT=2 \
+  -e COUCHBASE_QUERY_TIMEOUT=2 \
+  -e SCHEDULER_MAX_BATCH_SIZE=100 \
+  -e SCHEDULER_POLL_INTERVAL_SECONDS=5 \
+  -e LOG_LEVEL=info \
+  -e LOG_FORMAT=json \
+  ghcr.io/martavoi/kafka-timebridge:latest
+```
+
+#### Available Images
+- `ghcr.io/martavoi/kafka-timebridge:latest` - Latest stable release
+- Specific version tags - See [GitHub Releases](https://github.com/martavoi/kafka-timebridge/releases) for available versions
+- All images are based on Alpine Linux for minimal size (~15MB)
 
 ## How It Works
 
@@ -82,21 +147,6 @@ graph TB
 | `X-Timebridge-When` | Yes | RFC3339 timestamp | `2024-12-25T10:00:00Z` |
 | `X-Timebridge-Where` | Yes | Destination topic name | `user-notifications` |
 
-### Programmatic Example
-
-```go
-// Example using confluent-kafka-go
-producer.Produce(&kafka.Message{
-    TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-    Headers: []kafka.Header{
-        {Key: "X-Timebridge-When", Value: []byte("2024-12-25T10:00:00Z")},
-        {Key: "X-Timebridge-Where", Value: []byte("user-notifications")},
-        {Key: "Content-Type", Value: []byte("application/json")},
-    },
-    Value: []byte(`{"userId": 123, "message": "Scheduled notification"}`),
-}, nil)
-```
-
 ## Storage Backends
 
 ### In-Memory Backend (Default)
@@ -110,117 +160,6 @@ producer.Produce(&kafka.Message{
 - **Pros**: Persistent storage, scalable, high availability
 - **Cons**: Requires Couchbase cluster setup
 - **Configuration**: See Couchbase settings below
-
-## Installation
-
-### 🐳 Docker (Recommended)
-
-The easiest way to run kafka-timebridge is using Docker. Images are automatically built and published to GitHub Container Registry with each release.
-
-#### Quick Start
-```bash
-# Pull and run the latest version
-docker run --rm ghcr.io/martavoi/kafka-timebridge:latest
-
-# Run with custom Kafka configuration
-docker run --rm \
-  -e KAFKA_BROKERS=your-kafka:9092 \
-  -e KAFKA_TOPIC=timebridge \
-  -e BACKEND=memory \
-  ghcr.io/martavoi/kafka-timebridge:latest
-
-# Run a specific version
-docker run --rm ghcr.io/martavoi/kafka-timebridge:v1.2.3
-```
-
-#### Docker Compose Example
-```yaml
-version: '3.8'
-services:
-  kafka-timebridge:
-    image: ghcr.io/martavoi/kafka-timebridge:latest
-    environment:
-      - KAFKA_BROKERS=kafka:9092
-      - KAFKA_TOPIC=timebridge
-      - BACKEND=memory
-      - LOG_LEVEL=info
-      - LOG_FORMAT=json
-    restart: unless-stopped
-    depends_on:
-      - kafka
-```
-
-#### Available Tags
-- `latest` - Latest stable release
-- `v1.2.3` - Specific version tags
-- All images are based on Alpine Linux for minimal size (~15MB)
-
-### 📦 Binary Releases
-
-Pre-compiled binaries are available for Linux AMD64:
-
-1. **Download** from [GitHub Releases](https://github.com/martavoi/kafka-timebridge/releases)
-2. **Extract**: `tar -xzf kafka-timebridge-linux-amd64.tar.gz`
-3. **Run**: `./kafka-timebridge-linux-amd64`
-
-### 🔧 Build from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/martavoi/kafka-timebridge.git
-cd kafka-timebridge
-
-# Build (requires Go 1.24+ and CGO enabled)
-CGO_ENABLED=1 go build -o kafka-timebridge ./cmd
-
-# Run
-./kafka-timebridge
-```
-
-## CLI Usage
-
-kafka-timebridge provides a simple command-line interface with the following commands:
-
-```bash
-# Start the timebridge daemon (default behavior)
-kafka-timebridge
-
-# Display version information
-kafka-timebridge version
-
-# Show help and available commands
-kafka-timebridge help
-```
-
-### Examples
-
-```bash
-# Start with default configuration
-kafka-timebridge
-
-# Check the version
-$ kafka-timebridge version
-kafka-timebridge version v1.2.3
-
-# Get help
-$ kafka-timebridge help
-kafka-timebridge is a service that accepts Kafka messages with future delivery times
-and schedules them for re-delivery at the specified time. It supports multiple storage
-backends including in-memory and Couchbase for persistence.
-
-Usage:
-  kafka-timebridge [command]
-
-Available Commands:
-  completion  Generate the autocompletion script for the specified shell
-  help        Help about any command
-  version     Print the version number
-
-Flags:
-  -h, --help   help for kafka-timebridge
-
-Use "kafka-timebridge [command] --help" for more information about a command.
-```
 
 ## Configuration
 
@@ -268,9 +207,6 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `SCHEDULER_POLL_INTERVAL_SECONDS` | `--scheduler-poll-interval-seconds` | `5` | Polling interval in seconds for checking scheduled messages |
 
 
-
-
-
 ## Monitoring and Logging
 
 Timebridge provides structured logging with configurable levels and formats:
@@ -279,7 +215,119 @@ Timebridge provides structured logging with configurable levels and formats:
 - **Log Formats**: `text` (human-readable), `json` (machine-readable)
 - **Key Metrics**: Message processing, backend operations, Kafka events
 
-### Log Output Example (JSON)
-```json
-{"time":"2024-01-01T10:00:00Z","level":"INFO","msg":"Received scheduled message","when":"2024-12-25T10:00:00Z","where":"user-notifications","offset":123}
+### Example: Daemon Startup and Operation
+
+Here's what you'll see when running the daemon with `LOG_LEVEL=debug`:
+
+```
+# Daemon startup and configuration
+time=2025-09-09T01:24:58.359+03:00 level=DEBUG msg="Config loaded" backend=couchbase log_level=debug log_format=text kafka_brokers=localhost:9092 kafka_topic=timebridge kafka_group_id=timebridge kafka_username="" kafka_password="" kafka_security_protocol=PLAINTEXT kafka_sasl_mechanism=""
+time=2025-09-09T01:24:58.359+03:00 level=DEBUG msg="Couchbase config" couchbase_bucket=timebridge couchbase_scope=timebridge couchbase_collection=messages couchbase_username=timebridge couchbase_password=*** couchbase_connection_string=couchbase://localhost
+time=2025-09-09T01:24:58.359+03:00 level=INFO msg="Using Couchbase backend"
+time=2025-09-09T01:24:58.359+03:00 level=DEBUG msg="Connecting to Couchbase..."
+
+# Kafka consumer setup
+time=2025-09-09T01:24:58.367+03:00 level=DEBUG msg="Creating Kafka consumer..." brokers=localhost:9092 group_id=timebridge
+time=2025-09-09T01:24:58.369+03:00 level=DEBUG msg="Subscribing to topic..." topic=timebridge
+time=2025-09-09T01:24:58.369+03:00 level=DEBUG msg="Successfully subscribed to topic" topic=timebridge
+
+# Processing scheduled messages (scheduler delivering ready messages)
+time=2025-09-09T01:24:58.429+03:00 level=DEBUG msg="Producing messages..." count=5
+time=2025-09-09T01:24:58.429+03:00 level=DEBUG msg="Producing message..." where=timebridge-destination-1 when=2025-09-08T21:05:50.000Z backend_key=2854c602-fa23-40ce-ad09-c2b06eb93d22
+time=2025-09-09T01:24:58.439+03:00 level=DEBUG msg="Message delivered successfully, deleting from backend..." topic=timebridge-destination-1 offset=27 backend_key=2854c602-fa23-40ce-ad09-c2b06eb93d22 progress=1 total=5
+time=2025-09-09T01:24:58.440+03:00 level=INFO msg="Message delivered" backend_key=2854c602-fa23-40ce-ad09-c2b06eb93d22
+
+# Regular polling (no messages ready)
+time=2025-09-09T01:24:58.469+03:00 level=DEBUG msg="No messages to schedule" next_retry=5s
+time=2025-09-09T01:25:03.504+03:00 level=DEBUG msg="No messages to schedule" next_retry=5s
+
+# New message received from Kafka
+time=2025-09-09T01:25:14.544+03:00 level=INFO msg="Received scheduled message" when=2025-09-08T22:25:14.000Z where=timebridge-destination-1 remains=0s backend_key=7c1096ea-d911-46aa-8c98-e99f51fed188
+
+# Message immediately delivered (time has passed)
+time=2025-09-09T01:25:19.845+03:00 level=DEBUG msg="Producing messages..." count=1
+time=2025-09-09T01:25:19.851+03:00 level=INFO msg="Message delivered" backend_key=7c1096ea-d911-46aa-8c98-e99f51fed188
+```
+
+### Key Log Events
+
+- **Startup**: Configuration loading, backend connection, Kafka consumer setup
+- **Message Reception**: `"Received scheduled message"` with delivery time and destination
+- **Scheduled Delivery**: `"Producing messages..."` when delivery time arrives
+- **Delivery Confirmation**: `"Message delivered"` with backend cleanup
+- **Polling**: Regular `"No messages to schedule"` during quiet periods
+- **Progress Tracking**: Batch processing with `progress=X total=Y` counters
+
+## CLI
+
+For custom deployments without Docker, you can use pre-compiled binaries or build from source.
+
+### 📦 Binary Releases
+
+Pre-compiled binaries are available for Linux AMD64:
+
+1. **Download** from [GitHub Releases](https://github.com/martavoi/kafka-timebridge/releases)
+2. **Extract**: `tar -xzf kafka-timebridge-linux-amd64.tar.gz`
+3. **Run**: `./kafka-timebridge-linux-amd64`
+
+### 🔧 Build from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/martavoi/kafka-timebridge.git
+cd kafka-timebridge
+
+# Build (requires Go 1.24+ and CGO enabled)
+CGO_ENABLED=1 go build -o kafka-timebridge ./cmd
+
+# Run
+./kafka-timebridge
+```
+
+### Commands
+
+kafka-timebridge provides a simple command-line interface:
+
+```bash
+# Start the timebridge daemon (default behavior)
+kafka-timebridge
+
+# Display version information
+kafka-timebridge version
+
+# Show help and available commands
+kafka-timebridge help
+```
+
+### CLI Examples
+
+```bash
+# Start with default configuration
+kafka-timebridge
+
+# Start with custom settings using CLI flags
+kafka-timebridge --backend=couchbase --log-level=debug --kafka-brokers=kafka1:9092,kafka2:9092
+
+# Check the version
+$ kafka-timebridge version
+kafka-timebridge version v1.0.0
+
+# Get help
+$ kafka-timebridge help
+kafka-timebridge is a service that accepts Kafka messages with future delivery times
+and schedules them for re-delivery at the specified time. It supports multiple storage
+backends including in-memory and Couchbase for persistence.
+
+Usage:
+  kafka-timebridge [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  version     Print the version number
+
+Flags:
+  -h, --help   help for kafka-timebridge
+
+Use "kafka-timebridge [command] --help" for more information about a command.
 ```
