@@ -256,6 +256,9 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `COUCHBASE_COLLECTION` | `--couchbase-collection` | `messages` | Collection for storing messages |
 | `COUCHBASE_USERNAME` | `--couchbase-username` | `timebridge` | Couchbase username |
 | `COUCHBASE_PASSWORD` | `--couchbase-password` | | Couchbase password |
+| `COUCHBASE_UPSERT_TIMEOUT` | `--couchbase-upsert-timeout` | `2` | Timeout in seconds for upsert operations |
+| `COUCHBASE_QUERY_TIMEOUT` | `--couchbase-query-timeout` | `2` | Timeout in seconds for query operations |
+| `COUCHBASE_REMOVE_TIMEOUT` | `--couchbase-remove-timeout` | `2` | Timeout in seconds for remove operations |
 
 ### Scheduler Settings
 

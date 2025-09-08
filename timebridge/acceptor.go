@@ -2,6 +2,7 @@ package timebridge
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -16,17 +17,60 @@ const (
 )
 
 type Acceptor struct {
-	logger      *slog.Logger
-	consumer    *kafka.Consumer
-	storeWriter BackendWriter
+	logger        *slog.Logger
+	consumer      *kafka.Consumer
+	backendWriter BackendWriter
 }
 
-func NewAcceptor(logger *slog.Logger, consumer *kafka.Consumer, storeWriter BackendWriter) (*Acceptor, error) {
+func NewAcceptor(logger *slog.Logger, consumer *kafka.Consumer, backendWriter BackendWriter) (*Acceptor, error) {
 	return &Acceptor{
-		logger:      logger,
-		consumer:    consumer,
-		storeWriter: storeWriter,
+		logger:        logger,
+		consumer:      consumer,
+		backendWriter: backendWriter,
 	}, nil
+}
+
+func (a *Acceptor) remains(when time.Time) time.Duration {
+	if when.After(time.Now()) {
+		return time.Until(when)
+	}
+	return 0
+}
+
+// timebridgeHeaders parses the timebridge (system) headers and returns the when, where, and message headers
+func (a *Acceptor) timebridgeHeaders(headers []kafka.Header) (time.Time, string, []Header, error) {
+	var whenStr string
+	var where string
+
+	var messageHeaders []Header
+	for _, header := range headers {
+		switch header.Key {
+		case HeaderTimebridgeWhen:
+			whenStr = string(header.Value)
+		case HeaderTimebridgeWhere:
+			where = string(header.Value)
+		default:
+			messageHeaders = append(messageHeaders, Header{
+				Key:   header.Key,
+				Value: header.Value,
+			})
+		}
+	}
+
+	if whenStr == "" {
+		return time.Time{}, where, messageHeaders, fmt.Errorf("%s header is missing", HeaderTimebridgeWhen)
+	}
+
+	if where == "" {
+		return time.Time{}, where, messageHeaders, fmt.Errorf("%s header is missing", HeaderTimebridgeWhere)
+	}
+
+	when, err := time.Parse(time.RFC3339, whenStr)
+	if err != nil {
+		return time.Time{}, where, messageHeaders, fmt.Errorf("%s header is invalid, RFC3339 format expected", HeaderTimebridgeWhen)
+	}
+
+	return when, where, messageHeaders, nil
 }
 
 func (a *Acceptor) Run(ctx context.Context) error {
@@ -44,53 +88,17 @@ func (a *Acceptor) Run(ctx context.Context) error {
 			case *kafka.Message:
 				m := e
 
-				// Extract timebridge headers
-				var whenStr string
-				var where string
-
-				for _, header := range m.Headers {
-					switch header.Key {
-					case HeaderTimebridgeWhen:
-						whenStr = string(header.Value)
-					case HeaderTimebridgeWhere:
-						where = string(header.Value)
-					}
-				}
-
-				logger := a.logger.With("offset", m.TopicPartition.Offset)
-
-				if whenStr == "" {
-					logger.Warn("Timebridge when header is missing", "header", HeaderTimebridgeWhen)
-					continue
-				}
-
-				when, err := time.Parse(time.RFC3339, whenStr)
+				when, where, headers, err := a.timebridgeHeaders(m.Headers)
 				if err != nil {
-					logger.Warn("Invalid timebridge when header", "header", HeaderTimebridgeWhen, "error", err, "value", whenStr)
+					a.logger.Warn("Unable to recognize timebridge headers, skipping", "error", err)
 					continue
 				}
 
-				if where == "" {
-					logger.Warn("Timebridge where header is missing", "header", HeaderTimebridgeWhere)
-					continue
-				}
-
-				logger = logger.With("when", whenStr, "where", where)
-
-				// Filter out timebridge headers and collect remaining headers
-				var headers []Header
-				for _, header := range m.Headers {
-					if header.Key == HeaderTimebridgeWhen || header.Key == HeaderTimebridgeWhere {
-						continue // Skip timebridge headers
-					}
-					headers = append(headers, Header{
-						Key:   header.Key,
-						Value: header.Value,
-					})
-				}
+				remains := a.remains(when)
+				logger := a.logger.With("when", when, "where", where, "remains", remains)
 
 				writeOp := func() (*StoredMessage, error) {
-					storedMessage, err := a.storeWriter.Write(ctx, Message{
+					storedMessage, err := a.backendWriter.Write(ctx, Message{
 						Key:     m.Key,
 						Value:   m.Value,
 						Headers: headers,
@@ -102,17 +110,17 @@ func (a *Acceptor) Run(ctx context.Context) error {
 				}
 
 				notify := func(err error, duration time.Duration) {
-					logger.Error("Failed to write message to store", "error", err, "next_retry", duration)
+					logger.Error("Failed to write message to backend", "error", err, "next_retry", duration)
 				}
 
 				backoffStrategy := backoff.NewExponentialBackOff()
 				backoffStrategy.InitialInterval = 3 * time.Second
-				backoffStrategy.Multiplier = 2
-				backoffStrategy.MaxInterval = 1 * time.Hour
+				backoffStrategy.Multiplier = 1.5
+				backoffStrategy.MaxInterval = 5 * time.Minute
 
 				storedMessage, err := backoff.Retry(ctx, writeOp, backoff.WithBackOff(backoffStrategy), backoff.WithNotify(notify))
 				if err != nil {
-					logger.Error("Failed to write message to store", "error", err)
+					logger.Error("Failed to write message to backend", "error", err)
 					continue
 				}
 

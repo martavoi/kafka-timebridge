@@ -53,8 +53,9 @@ func (s *Scheduler) Run(ctx context.Context) error {
 			}
 
 			if len(batch) == 0 {
-				s.logger.Debug("No messages to schedule", "next_retry", 5*time.Second)
-				<-time.After(time.Duration(s.config.PollIntervalSeconds) * time.Second)
+				pollInterval := time.Duration(s.config.PollIntervalSeconds) * time.Second
+				s.logger.Debug("No messages to schedule", "next_retry", pollInterval)
+				<-time.After(pollInterval)
 				continue
 			}
 

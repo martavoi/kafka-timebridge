@@ -35,6 +35,9 @@ func (c *Config) Load(cmd *cobra.Command) error {
 		viper.BindPFlag("couchbase.username", cmd.Flags().Lookup("couchbase-username"))
 		viper.BindPFlag("couchbase.password", cmd.Flags().Lookup("couchbase-password"))
 		viper.BindPFlag("couchbase.connection_string", cmd.Flags().Lookup("couchbase-connection-string"))
+		viper.BindPFlag("couchbase.upsert_timeout", cmd.Flags().Lookup("couchbase-upsert-timeout"))
+		viper.BindPFlag("couchbase.query_timeout", cmd.Flags().Lookup("couchbase-query-timeout"))
+		viper.BindPFlag("couchbase.remove_timeout", cmd.Flags().Lookup("couchbase-remove-timeout"))
 		viper.BindPFlag("scheduler.max_batch_size", cmd.Flags().Lookup("scheduler-max-batch-size"))
 		viper.BindPFlag("scheduler.poll_interval_seconds", cmd.Flags().Lookup("scheduler-poll-interval-seconds"))
 	}
@@ -56,6 +59,9 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.BindEnv("couchbase.username", "COUCHBASE_USERNAME")
 	viper.BindEnv("couchbase.password", "COUCHBASE_PASSWORD")
 	viper.BindEnv("couchbase.connectionString", "COUCHBASE_CONNECTION_STRING")
+	viper.BindEnv("couchbase.upsert_timeout", "COUCHBASE_UPSERT_TIMEOUT")
+	viper.BindEnv("couchbase.query_timeout", "COUCHBASE_QUERY_TIMEOUT")
+	viper.BindEnv("couchbase.remove_timeout", "COUCHBASE_REMOVE_TIMEOUT")
 	viper.BindEnv("scheduler.max_batch_size", "SCHEDULER_MAX_BATCH_SIZE")
 	viper.BindEnv("scheduler.poll_interval_seconds", "SCHEDULER_POLL_INTERVAL_SECONDS")
 
@@ -74,6 +80,9 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.SetDefault("couchbase.collection", "messages")
 	viper.SetDefault("couchbase.username", "timebridge")
 	viper.SetDefault("couchbase.connectionString", "couchbase://localhost")
+	viper.SetDefault("couchbase.upsert_timeout", 2)
+	viper.SetDefault("couchbase.query_timeout", 2)
+	viper.SetDefault("couchbase.remove_timeout", 2)
 	// Scheduler defaults
 	viper.SetDefault("scheduler.max_batch_size", 100)
 	viper.SetDefault("scheduler.poll_interval_seconds", 5)
@@ -112,6 +121,9 @@ type CouchbaseConfig struct {
 	Username         string       `validate:"omitempty"`
 	Password         SecretString `validate:"omitempty"`
 	ConnectionString string       `validate:"omitempty"`
+	UpsertTimeout    int          `mapstructure:"upsert_timeout"`
+	QueryTimeout     int          `mapstructure:"query_timeout"`
+	RemoveTimeout    int          `mapstructure:"remove_timeout"`
 }
 
 type SchedulerConfig struct {

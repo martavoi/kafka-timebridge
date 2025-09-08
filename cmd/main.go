@@ -57,6 +57,9 @@ func init() {
 	rootCmd.PersistentFlags().String("couchbase-username", "timebridge", "Couchbase username")
 	rootCmd.PersistentFlags().String("couchbase-password", "", "Couchbase password")
 	rootCmd.PersistentFlags().String("couchbase-connection-string", "couchbase://localhost", "Couchbase connection string")
+	rootCmd.PersistentFlags().Int("couchbase-upsert-timeout", 2, "Couchbase upsert operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("couchbase-query-timeout", 2, "Couchbase query operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("couchbase-remove-timeout", 2, "Couchbase remove operation timeout in seconds")
 	rootCmd.PersistentFlags().Int("scheduler-max-batch-size", 100, "Maximum number of messages to process in one batch")
 	rootCmd.PersistentFlags().Int("scheduler-poll-interval-seconds", 5, "Polling interval in seconds for checking scheduled messages")
 }

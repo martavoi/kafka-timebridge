@@ -19,7 +19,7 @@ type MessageDocument struct {
 	Key     []byte          `json:"key"`
 	Value   []byte          `json:"value"`
 	Headers []MessageHeader `json:"headers"`
-	When    time.Time       `json:"when"`
+	When    int64           `json:"when"` // Unix timestamp in seconds for reliable comparison
 	Where   string          `json:"where"`
 }
 
@@ -64,14 +64,14 @@ func (s *Backend) Write(ctx context.Context, m timebridge.Message) (*timebridge.
 		Key:     m.Key,
 		Value:   m.Value,
 		Headers: headers,
-		When:    m.When,
+		When:    m.When.Unix(), // Store as Unix timestamp for reliable comparison
 		Where:   m.Where,
 	}
 
 	key := uuid.New().String()
 
 	_, err := collection.Upsert(key, doc, &gocb.UpsertOptions{
-		Timeout: 2 * time.Second,
+		Timeout: time.Duration(s.cfg.UpsertTimeout) * time.Second,
 	})
 	if err != nil {
 		return nil, err
@@ -89,9 +89,11 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 	collection := scope.Collection(s.cfg.Collection)
 
 	// Query only messages that are ready to be delivered (when <= now), ordered by when ASC (oldest first)
-	query := fmt.Sprintf("SELECT META().id, `key`, `value`, `headers`, `when`, `where` FROM `%s` WHERE `when` <= NOW_UTC() ORDER BY `when` ASC LIMIT %d", collection.Name(), limit)
+	// Use Unix timestamp comparison for reliable results across timezones
+	nowUnix := time.Now().Unix()
+	query := fmt.Sprintf("SELECT META().id, `key`, `value`, `headers`, `when`, `where` FROM `%s` WHERE `when` <= %d ORDER BY `when` ASC LIMIT %d", collection.Name(), nowUnix, limit)
 	rows, err := scope.Query(query, &gocb.QueryOptions{
-		Timeout: 3 * time.Second,
+		Timeout: time.Duration(s.cfg.QueryTimeout) * time.Second,
 	})
 	if err != nil {
 		return nil, err
@@ -107,7 +109,7 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 			Key     []byte          `json:"key"`
 			Value   []byte          `json:"value"`
 			Headers []MessageHeader `json:"headers"`
-			When    time.Time       `json:"when"`
+			When    int64           `json:"when"` // Unix timestamp
 			Where   string          `json:"where"`
 		}
 
@@ -126,7 +128,7 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 				Key:     QueryResultRow.Key,
 				Value:   QueryResultRow.Value,
 				Headers: headers,
-				When:    QueryResultRow.When,
+				When:    time.Unix(QueryResultRow.When, 0).UTC(), // Convert Unix timestamp back to time.Time in UTC
 				Where:   QueryResultRow.Where,
 			},
 			Key: QueryResultRow.Id,
@@ -146,7 +148,7 @@ func (s *Backend) Delete(ctx context.Context, key string) error {
 	collection := scope.Collection(s.cfg.Collection)
 
 	_, err := collection.Remove(key, &gocb.RemoveOptions{
-		Timeout: 2 * time.Second,
+		Timeout: time.Duration(s.cfg.RemoveTimeout) * time.Second,
 	})
 	return err
 }
