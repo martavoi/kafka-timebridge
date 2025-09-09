@@ -130,7 +130,8 @@ func (b *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 	defer cancel()
 
 	// Query only messages that are ready to be delivered (when <= now), ordered by when ASC (oldest first)
-	filter := bson.M{"when": bson.M{"$lte": time.Now().UTC()}}
+	nowUtc := time.Now().UTC()
+	filter := bson.M{"when": bson.M{"$lte": nowUtc}}
 	opts := options.Find().
 		SetSort(bson.D{{Key: "when", Value: 1}}). // Ascending order (oldest first)
 		SetLimit(int64(limit))
