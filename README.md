@@ -178,23 +178,11 @@ graph TB
 
 ## Storage Backends
 
-### In-Memory Backend (Default)
-- **Purpose**: Development, testing, and simple use cases
-- **Pros**: Zero configuration, instant startup
-- **Cons**: Messages lost on restart, limited by available RAM
-- **Configuration**: No additional setup required
+Timebridge supports three storage backends for different use cases:
 
-### Couchbase Backend (Recommended for Production)
-- **Purpose**: Production deployments requiring persistence and reliability
-- **Pros**: Persistent storage, scalable, high availability
-- **Cons**: Requires Couchbase cluster setup
-- **Configuration**: See Couchbase settings below
-
-### MongoDB Backend (Recommended for Production)
-- **Purpose**: Production deployments requiring persistence and reliability
-- **Pros**: Native datetime support, persistent storage, scalable, high availability, JSON document model
-- **Cons**: Requires MongoDB cluster setup
-- **Configuration**: See MongoDB settings below
+- **`memory`** (default) - In-memory storage for development and testing. Messages are lost on restart.
+- **`couchbase`** - Persistent Couchbase backend for production deployments. See [Couchbase Settings](#couchbase-settings).
+- **`mongodb`** - Persistent MongoDB backend for production deployments. See [MongoDB Settings](#mongodb-settings).
 
 ## Configuration
 
@@ -352,26 +340,39 @@ kafka-timebridge help
 ### CLI Examples
 
 ```bash
-# Start with default configuration
+# Start with default configuration (memory backend)
 kafka-timebridge
 
-# Start with custom settings using CLI flags (Couchbase)
-kafka-timebridge --backend=couchbase --log-level=debug --kafka-brokers=kafka1:9092,kafka2:9092
+# Start with Couchbase backend
+kafka-timebridge --backend=couchbase \
+  --couchbase-connection-string=couchbase://localhost \
+  --couchbase-username=timebridge \
+  --couchbase-password=123456 \
+  --log-level=debug
 
 # Start with MongoDB backend
-kafka-timebridge --backend=mongodb --mongodb-connection-string=mongodb://localhost:27017 --log-level=debug
+kafka-timebridge --backend=mongodb \
+  --mongodb-connection-string=mongodb://localhost:27017 \
+  --mongodb-database=timebridge \
+  --log-level=debug
 
-# Check the version
+# Start with custom Kafka settings
+kafka-timebridge --kafka-brokers=kafka1:9092,kafka2:9092 \
+  --kafka-topic=delayed-messages \
+  --kafka-group-id=my-timebridge
+
+# Check version
 $ kafka-timebridge version
 kafka-timebridge version v1.0.0
 
-# Get help
+# Get help and see all available flags
 $ kafka-timebridge help
 kafka-timebridge is a service that accepts Kafka messages with future delivery times
 and schedules them for re-delivery at the specified time. It supports multiple storage
 backends including in-memory and Couchbase for persistence.
 
 Usage:
+  kafka-timebridge [flags]
   kafka-timebridge [command]
 
 Available Commands:
@@ -380,7 +381,38 @@ Available Commands:
   version     Print the version number
 
 Flags:
-  -h, --help   help for kafka-timebridge
+      --backend string                        Backend type (memory, couchbase, mongodb) (default "memory")
+      --couchbase-bucket string               Couchbase bucket name (default "timebridge")
+      --couchbase-collection string           Couchbase collection name (default "messages")
+      --couchbase-connection-string string    Couchbase connection string (default "couchbase://localhost")
+      --couchbase-password string             Couchbase password
+      --couchbase-query-timeout int           Couchbase query operation timeout in seconds (default 2)
+      --couchbase-remove-timeout int          Couchbase remove operation timeout in seconds (default 2)
+      --couchbase-scope string                Couchbase scope name (default "timebridge")
+      --couchbase-upsert-timeout int          Couchbase upsert operation timeout in seconds (default 2)
+      --couchbase-username string             Couchbase username (default "timebridge")
+  -h, --help                                  help for kafka-timebridge
+      --kafka-brokers string                  Kafka broker addresses (default "localhost:9092")
+      --kafka-group-id string                 Kafka consumer group ID (default "timebridge")
+      --kafka-password string                 Kafka password
+      --kafka-sasl-mechanism string           Kafka SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
+      --kafka-security-protocol string        Kafka security protocol (PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL) (default "PLAINTEXT")
+      --kafka-topic string                    Kafka topic name (default "timebridge")
+      --kafka-username string                 Kafka username
+      --log-format string                     Log format (text, json) (default "text")
+      --log-level string                      Log level (debug, info, warn, error, fatal) (default "info")
+      --mongodb-collection string             MongoDB collection name (default "messages")
+      --mongodb-connect-timeout int           MongoDB connection timeout in seconds (default 10)
+      --mongodb-connection-string string      MongoDB connection string (default "mongodb://localhost:27017")
+      --mongodb-database string               MongoDB database name (default "timebridge")
+      --mongodb-delete-timeout int            MongoDB delete operation timeout in seconds (default 5)
+      --mongodb-index-timeout int             MongoDB index creation timeout in seconds (default 30)
+      --mongodb-password string               MongoDB password
+      --mongodb-read-timeout int              MongoDB read operation timeout in seconds (default 5)
+      --mongodb-username string               MongoDB username
+      --mongodb-write-timeout int             MongoDB write operation timeout in seconds (default 5)
+      --scheduler-max-batch-size int          Maximum number of messages to process in one batch (default 100)
+      --scheduler-poll-interval-seconds int   Polling interval in seconds for checking scheduled messages (default 5)
 
 Use "kafka-timebridge [command] --help" for more information about a command.
 ```
