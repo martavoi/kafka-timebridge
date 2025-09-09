@@ -230,11 +230,12 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `MONGODB_COLLECTION` | `--mongodb-collection` | `messages` | Collection for storing messages |
 | `MONGODB_USERNAME` | `--mongodb-username` | | MongoDB username (optional) |
 | `MONGODB_PASSWORD` | `--mongodb-password` | | MongoDB password (optional) |
-| `MONGODB_CONNECT_TIMEOUT` | `--mongodb-connect-timeout` | `10` | Connection timeout in seconds |
-| `MONGODB_WRITE_TIMEOUT` | `--mongodb-write-timeout` | `5` | Timeout in seconds for write operations |
-| `MONGODB_READ_TIMEOUT` | `--mongodb-read-timeout` | `5` | Timeout in seconds for read operations |
-| `MONGODB_DELETE_TIMEOUT` | `--mongodb-delete-timeout` | `5` | Timeout in seconds for delete operations |
-| `MONGODB_INDEX_TIMEOUT` | `--mongodb-index-timeout` | `30` | Timeout in seconds for index creation |
+| `MONGODB_CONNECT_TIMEOUT` | `--mongodb-connect-timeout` | `2` | Connection timeout in seconds |
+| `MONGODB_WRITE_TIMEOUT` | `--mongodb-write-timeout` | `2` | Timeout in seconds for write operations |
+| `MONGODB_READ_TIMEOUT` | `--mongodb-read-timeout` | `2` | Timeout in seconds for read operations |
+| `MONGODB_DELETE_TIMEOUT` | `--mongodb-delete-timeout` | `2` | Timeout in seconds for delete operations |
+| `MONGODB_INDEX_TIMEOUT` | `--mongodb-index-timeout` | `5` | Timeout in seconds for index creation |
+| `MONGODB_AUTO_CREATE_INDEX` | `--mongodb-auto-create-index` | `true` | Automatically create index on 'when' field |
 
 ### Scheduler Settings
 
@@ -401,15 +402,16 @@ Flags:
       --log-format string                     Log format (text, json) (default "text")
       --log-level string                      Log level (debug, info, warn, error, fatal) (default "info")
       --mongodb-collection string             MongoDB collection name (default "messages")
-      --mongodb-connect-timeout int           MongoDB connection timeout in seconds (default 10)
+      --mongodb-connect-timeout int           MongoDB connection timeout in seconds (default 2)
       --mongodb-connection-string string      MongoDB connection string (default "mongodb://localhost:27017")
       --mongodb-database string               MongoDB database name (default "timebridge")
-      --mongodb-delete-timeout int            MongoDB delete operation timeout in seconds (default 5)
-      --mongodb-index-timeout int             MongoDB index creation timeout in seconds (default 30)
+      --mongodb-delete-timeout int            MongoDB delete operation timeout in seconds (default 2)
+      --mongodb-index-timeout int             MongoDB index creation timeout in seconds (default 5)
+      --mongodb-auto-create-index             Automatically create MongoDB index on 'when' field (default true)
       --mongodb-password string               MongoDB password
-      --mongodb-read-timeout int              MongoDB read operation timeout in seconds (default 5)
+      --mongodb-read-timeout int              MongoDB read operation timeout in seconds (default 2)
       --mongodb-username string               MongoDB username
-      --mongodb-write-timeout int             MongoDB write operation timeout in seconds (default 5)
+      --mongodb-write-timeout int             MongoDB write operation timeout in seconds (default 2)
       --scheduler-max-batch-size int          Maximum number of messages to process in one batch (default 100)
       --scheduler-poll-interval-seconds int   Polling interval in seconds for checking scheduled messages (default 5)
 

@@ -49,6 +49,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 		viper.BindPFlag("mongodb.read_timeout", cmd.Flags().Lookup("mongodb-read-timeout"))
 		viper.BindPFlag("mongodb.delete_timeout", cmd.Flags().Lookup("mongodb-delete-timeout"))
 		viper.BindPFlag("mongodb.index_timeout", cmd.Flags().Lookup("mongodb-index-timeout"))
+		viper.BindPFlag("mongodb.auto_create_index", cmd.Flags().Lookup("mongodb-auto-create-index"))
 		viper.BindPFlag("scheduler.max_batch_size", cmd.Flags().Lookup("scheduler-max-batch-size"))
 		viper.BindPFlag("scheduler.poll_interval_seconds", cmd.Flags().Lookup("scheduler-poll-interval-seconds"))
 	}
@@ -83,6 +84,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.BindEnv("mongodb.read_timeout", "MONGODB_READ_TIMEOUT")
 	viper.BindEnv("mongodb.delete_timeout", "MONGODB_DELETE_TIMEOUT")
 	viper.BindEnv("mongodb.index_timeout", "MONGODB_INDEX_TIMEOUT")
+	viper.BindEnv("mongodb.auto_create_index", "MONGODB_AUTO_CREATE_INDEX")
 	viper.BindEnv("scheduler.max_batch_size", "SCHEDULER_MAX_BATCH_SIZE")
 	viper.BindEnv("scheduler.poll_interval_seconds", "SCHEDULER_POLL_INTERVAL_SECONDS")
 
@@ -114,6 +116,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.SetDefault("mongodb.read_timeout", 2)
 	viper.SetDefault("mongodb.delete_timeout", 2)
 	viper.SetDefault("mongodb.index_timeout", 5)
+	viper.SetDefault("mongodb.auto_create_index", true)
 	// Scheduler defaults
 	viper.SetDefault("scheduler.max_batch_size", 100)
 	viper.SetDefault("scheduler.poll_interval_seconds", 5)
@@ -173,4 +176,5 @@ type MongoDBConfig struct {
 	ReadTimeout      int          `mapstructure:"read_timeout"`
 	DeleteTimeout    int          `mapstructure:"delete_timeout"`
 	IndexTimeout     int          `mapstructure:"index_timeout"`
+	AutoCreateIndex  bool         `mapstructure:"auto_create_index"`
 }

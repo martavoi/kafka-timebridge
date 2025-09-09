@@ -18,11 +18,12 @@ func getTestConfig() timebridge.MongoDBConfig {
 		Username:         "",                // No auth for local testing
 		Password:         "",
 		ConnectionString: "mongodb://localhost:27017",
-		ConnectTimeout:   10,
-		WriteTimeout:     5,
-		ReadTimeout:      5,
-		DeleteTimeout:    5,
-		IndexTimeout:     30,
+		ConnectTimeout:   2,
+		WriteTimeout:     2,
+		ReadTimeout:      2,
+		DeleteTimeout:    2,
+		IndexTimeout:     5,
+		AutoCreateIndex:  true, // Enable for tests
 	}
 }
 
@@ -32,15 +33,14 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
+	ctx := context.Background()
 	cfg := getTestConfig()
 	backend, err := NewBackend(cfg)
 	require.NoError(t, err, "Failed to create backend")
 
-	err = backend.Connect()
+	err = backend.Connect(ctx)
 	require.NoError(t, err, "Failed to connect to MongoDB")
 	defer backend.Close()
-
-	ctx := context.Background()
 
 	// Test message with realistic headers (what acceptor would send)
 	originalMessage := timebridge.Message{
@@ -124,15 +124,14 @@ func TestBackend_ReadBatch_Ordering(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
+	ctx := context.Background()
 	cfg := getTestConfig()
 	backend, err := NewBackend(cfg)
 	require.NoError(t, err)
 
-	err = backend.Connect()
+	err = backend.Connect(ctx)
 	require.NoError(t, err)
 	defer backend.Close()
-
-	ctx := context.Background()
 
 	// Create messages with different timestamps
 	now := time.Now()
@@ -200,15 +199,14 @@ func TestBackend_WriteWithoutKey(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
+	ctx := context.Background()
 	cfg := getTestConfig()
 	backend, err := NewBackend(cfg)
 	require.NoError(t, err, "Failed to create backend")
 
-	err = backend.Connect()
+	err = backend.Connect(ctx)
 	require.NoError(t, err, "Failed to connect to MongoDB")
 	defer backend.Close()
-
-	ctx := context.Background()
 
 	// Message without key (null key)
 	messageWithoutKey := timebridge.Message{
@@ -244,15 +242,14 @@ func TestBackend_WriteEmptyMessage(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
+	ctx := context.Background()
 	cfg := getTestConfig()
 	backend, err := NewBackend(cfg)
 	require.NoError(t, err, "Failed to create backend")
 
-	err = backend.Connect()
+	err = backend.Connect(ctx)
 	require.NoError(t, err, "Failed to connect to MongoDB")
 	defer backend.Close()
-
-	ctx := context.Background()
 
 	// Message with empty value and no headers (minimal message)
 	emptyMessage := timebridge.Message{
@@ -285,15 +282,14 @@ func TestBackend_ReadBatch_FutureMessages(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
+	ctx := context.Background()
 	cfg := getTestConfig()
 	backend, err := NewBackend(cfg)
 	require.NoError(t, err)
 
-	err = backend.Connect()
+	err = backend.Connect(ctx)
 	require.NoError(t, err)
 	defer backend.Close()
-
-	ctx := context.Background()
 
 	// Create a message scheduled for the future
 	futureMessage := timebridge.Message{
@@ -323,15 +319,14 @@ func TestBackend_DateTimeHandling(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
+	ctx := context.Background()
 	cfg := getTestConfig()
 	backend, err := NewBackend(cfg)
 	require.NoError(t, err)
 
-	err = backend.Connect()
+	err = backend.Connect(ctx)
 	require.NoError(t, err)
 	defer backend.Close()
-
-	ctx := context.Background()
 
 	// Test with various time formats and timezones
 	testCases := []struct {
@@ -399,6 +394,10 @@ func TestBackend_DateTimeHandling(t *testing.T) {
 }
 
 func TestBackend_WriteError_InvalidConfig(t *testing.T) {
+	// Use short timeout context for quick failure
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
 	// Test with invalid configuration
 	cfg := timebridge.MongoDBConfig{
 		Database:         "test",
@@ -417,7 +416,7 @@ func TestBackend_WriteError_InvalidConfig(t *testing.T) {
 	require.NoError(t, err, "Backend creation should succeed")
 
 	// Connection should fail with invalid config
-	err = backend.Connect()
+	err = backend.Connect(ctx)
 	assert.Error(t, err, "Connection should fail with invalid config")
 }
 

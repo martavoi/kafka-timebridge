@@ -35,12 +35,13 @@ func NewBackend(cfg timebridge.MongoDBConfig) (*Backend, error) {
 	return &Backend{cfg: cfg}, nil
 }
 
-func (b *Backend) Connect() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(b.cfg.ConnectTimeout)*time.Second)
-	defer cancel()
+func (b *Backend) Connect(ctx context.Context) error {
 
-	// Create client options
-	clientOptions := options.Client().ApplyURI(b.cfg.ConnectionString)
+	// Create client options with explicit timeouts
+	clientOptions := options.Client().
+		ApplyURI(b.cfg.ConnectionString).
+		SetConnectTimeout(time.Duration(b.cfg.ConnectTimeout) * time.Second).
+		SetServerSelectionTimeout(time.Duration(b.cfg.ConnectTimeout) * time.Second)
 
 	// Add authentication if credentials are provided
 	if b.cfg.Username != "" && b.cfg.Password.String() != "" {
@@ -67,18 +68,19 @@ func (b *Backend) Connect() error {
 	b.client = client
 	b.collection = client.Database(b.cfg.Database).Collection(b.cfg.Collection)
 
-	// Create index on 'when' field for efficient queries
-	indexModel := mongo.IndexModel{
-		Keys: bson.D{{Key: "when", Value: 1}}, // Ascending index on 'when' field
-	}
+	// Create index on 'when' field for efficient queries (if enabled)
+	if b.cfg.AutoCreateIndex {
+		indexModel := mongo.IndexModel{
+			Keys: bson.D{{Key: "when", Value: 1}}, // Ascending index on 'when' field
+		}
 
-	indexCtx, indexCancel := context.WithTimeout(context.Background(), time.Duration(b.cfg.IndexTimeout)*time.Second)
-	defer indexCancel()
+		indexCtx, indexCancel := context.WithTimeout(ctx, time.Duration(b.cfg.IndexTimeout)*time.Second)
+		defer indexCancel()
 
-	_, err = b.collection.Indexes().CreateOne(indexCtx, indexModel)
-	if err != nil {
-		// Don't fail if index already exists
-		// Just log and continue
+		_, err = b.collection.Indexes().CreateOne(indexCtx, indexModel)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

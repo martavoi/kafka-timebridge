@@ -66,11 +66,12 @@ func init() {
 	rootCmd.PersistentFlags().String("mongodb-username", "", "MongoDB username")
 	rootCmd.PersistentFlags().String("mongodb-password", "", "MongoDB password")
 	rootCmd.PersistentFlags().String("mongodb-connection-string", "mongodb://localhost:27017", "MongoDB connection string")
-	rootCmd.PersistentFlags().Int("mongodb-connect-timeout", 10, "MongoDB connection timeout in seconds")
-	rootCmd.PersistentFlags().Int("mongodb-write-timeout", 5, "MongoDB write operation timeout in seconds")
-	rootCmd.PersistentFlags().Int("mongodb-read-timeout", 5, "MongoDB read operation timeout in seconds")
-	rootCmd.PersistentFlags().Int("mongodb-delete-timeout", 5, "MongoDB delete operation timeout in seconds")
-	rootCmd.PersistentFlags().Int("mongodb-index-timeout", 30, "MongoDB index creation timeout in seconds")
+	rootCmd.PersistentFlags().Int("mongodb-connect-timeout", 2, "MongoDB connection timeout in seconds")
+	rootCmd.PersistentFlags().Int("mongodb-write-timeout", 2, "MongoDB write operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("mongodb-read-timeout", 2, "MongoDB read operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("mongodb-delete-timeout", 2, "MongoDB delete operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("mongodb-index-timeout", 5, "MongoDB index creation timeout in seconds")
+	rootCmd.PersistentFlags().Bool("mongodb-auto-create-index", true, "Automatically create MongoDB index on 'when' field")
 	rootCmd.PersistentFlags().Int("scheduler-max-batch-size", 100, "Maximum number of messages to process in one batch")
 	rootCmd.PersistentFlags().Int("scheduler-poll-interval-seconds", 5, "Polling interval in seconds for checking scheduled messages")
 }
@@ -106,7 +107,7 @@ func runMain(cmd *cobra.Command, args []string) {
 		logger = slog.New(slog.NewTextHandler(os.Stdout, handlerOptions))
 	}
 
-	logger.Debug("Config loaded",
+	logger.Info("Config loaded",
 		"backend", cfg.Backend,
 		"log_level", cfg.LogLevel,
 		"log_format", cfg.LogFormat,
@@ -121,24 +122,33 @@ func runMain(cmd *cobra.Command, args []string) {
 
 	// Only log Couchbase config if it's being used
 	if cfg.Backend == "couchbase" {
-		logger.Debug("Couchbase config",
+		logger.Info("Couchbase config",
 			"couchbase_bucket", cfg.Couchbase.Bucket,
 			"couchbase_scope", cfg.Couchbase.Scope,
 			"couchbase_collection", cfg.Couchbase.Collection,
 			"couchbase_username", cfg.Couchbase.Username,
 			"couchbase_password", cfg.Couchbase.Password,
 			"couchbase_connection_string", cfg.Couchbase.ConnectionString,
+			"couchbase_upsert_timeout", cfg.Couchbase.UpsertTimeout,
+			"couchbase_query_timeout", cfg.Couchbase.QueryTimeout,
+			"couchbase_remove_timeout", cfg.Couchbase.RemoveTimeout,
 		)
 	}
 
 	// Only log MongoDB config if it's being used
 	if cfg.Backend == "mongodb" {
-		logger.Debug("MongoDB config",
+		logger.Info("MongoDB config",
 			"mongodb_database", cfg.MongoDB.Database,
 			"mongodb_collection", cfg.MongoDB.Collection,
 			"mongodb_username", cfg.MongoDB.Username,
 			"mongodb_password", cfg.MongoDB.Password,
 			"mongodb_connection_string", cfg.MongoDB.ConnectionString,
+			"mongodb_connect_timeout", cfg.MongoDB.ConnectTimeout,
+			"mongodb_write_timeout", cfg.MongoDB.WriteTimeout,
+			"mongodb_read_timeout", cfg.MongoDB.ReadTimeout,
+			"mongodb_delete_timeout", cfg.MongoDB.DeleteTimeout,
+			"mongodb_index_timeout", cfg.MongoDB.IndexTimeout,
+			"mongodb_auto_create_index", cfg.MongoDB.AutoCreateIndex,
 		)
 	}
 
@@ -173,7 +183,9 @@ func runMain(cmd *cobra.Command, args []string) {
 		}
 
 		logger.Debug("Connecting to MongoDB...")
-		err = mongoBackend.Connect()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(cfg.MongoDB.ConnectTimeout)*time.Second)
+		defer cancel()
+		err = mongoBackend.Connect(ctx)
 		if err != nil {
 			logger.Error("Failed to connect to MongoDB", "error", err)
 			return
