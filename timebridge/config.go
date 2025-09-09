@@ -39,6 +39,8 @@ func (c *Config) Load(cmd *cobra.Command) error {
 		viper.BindPFlag("couchbase.upsert_timeout", cmd.Flags().Lookup("couchbase-upsert-timeout"))
 		viper.BindPFlag("couchbase.query_timeout", cmd.Flags().Lookup("couchbase-query-timeout"))
 		viper.BindPFlag("couchbase.remove_timeout", cmd.Flags().Lookup("couchbase-remove-timeout"))
+		viper.BindPFlag("couchbase.index_timeout", cmd.Flags().Lookup("couchbase-index-timeout"))
+		viper.BindPFlag("couchbase.auto_create_index", cmd.Flags().Lookup("couchbase-auto-create-index"))
 		viper.BindPFlag("mongodb.database", cmd.Flags().Lookup("mongodb-database"))
 		viper.BindPFlag("mongodb.collection", cmd.Flags().Lookup("mongodb-collection"))
 		viper.BindPFlag("mongodb.username", cmd.Flags().Lookup("mongodb-username"))
@@ -74,6 +76,8 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.BindEnv("couchbase.upsert_timeout", "COUCHBASE_UPSERT_TIMEOUT")
 	viper.BindEnv("couchbase.query_timeout", "COUCHBASE_QUERY_TIMEOUT")
 	viper.BindEnv("couchbase.remove_timeout", "COUCHBASE_REMOVE_TIMEOUT")
+	viper.BindEnv("couchbase.index_timeout", "COUCHBASE_INDEX_TIMEOUT")
+	viper.BindEnv("couchbase.auto_create_index", "COUCHBASE_AUTO_CREATE_INDEX")
 	viper.BindEnv("mongodb.database", "MONGODB_DATABASE")
 	viper.BindEnv("mongodb.collection", "MONGODB_COLLECTION")
 	viper.BindEnv("mongodb.username", "MONGODB_USERNAME")
@@ -106,6 +110,8 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.SetDefault("couchbase.upsert_timeout", 2)
 	viper.SetDefault("couchbase.query_timeout", 2)
 	viper.SetDefault("couchbase.remove_timeout", 2)
+	viper.SetDefault("couchbase.index_timeout", 5)
+	viper.SetDefault("couchbase.auto_create_index", true)
 	// MongoDB defaults - only used when backend is "mongodb"
 	viper.SetDefault("mongodb.database", "timebridge")
 	viper.SetDefault("mongodb.collection", "messages")
@@ -158,6 +164,8 @@ type CouchbaseConfig struct {
 	UpsertTimeout    int          `mapstructure:"upsert_timeout"`
 	QueryTimeout     int          `mapstructure:"query_timeout"`
 	RemoveTimeout    int          `mapstructure:"remove_timeout"`
+	IndexTimeout     int          `mapstructure:"index_timeout"`
+	AutoCreateIndex  bool         `mapstructure:"auto_create_index"`
 }
 
 type SchedulerConfig struct {

@@ -220,6 +220,8 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `COUCHBASE_UPSERT_TIMEOUT` | `--couchbase-upsert-timeout` | `2` | Timeout in seconds for upsert operations |
 | `COUCHBASE_QUERY_TIMEOUT` | `--couchbase-query-timeout` | `2` | Timeout in seconds for query operations |
 | `COUCHBASE_REMOVE_TIMEOUT` | `--couchbase-remove-timeout` | `2` | Timeout in seconds for remove operations |
+| `COUCHBASE_INDEX_TIMEOUT` | `--couchbase-index-timeout` | `5` | Timeout in seconds for index creation |
+| `COUCHBASE_AUTO_CREATE_INDEX` | `--couchbase-auto-create-index` | `true` | Automatically create index on 'when' field |
 
 ### MongoDB Settings
 
@@ -388,6 +390,8 @@ Flags:
       --couchbase-password string             Couchbase password
       --couchbase-query-timeout int           Couchbase query operation timeout in seconds (default 2)
       --couchbase-remove-timeout int          Couchbase remove operation timeout in seconds (default 2)
+      --couchbase-index-timeout int           Couchbase index creation timeout in seconds (default 5)
+      --couchbase-auto-create-index            Automatically create Couchbase index on 'when' field (default true)
       --couchbase-scope string                Couchbase scope name (default "timebridge")
       --couchbase-upsert-timeout int          Couchbase upsert operation timeout in seconds (default 2)
       --couchbase-username string             Couchbase username (default "timebridge")

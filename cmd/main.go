@@ -61,6 +61,8 @@ func init() {
 	rootCmd.PersistentFlags().Int("couchbase-upsert-timeout", 2, "Couchbase upsert operation timeout in seconds")
 	rootCmd.PersistentFlags().Int("couchbase-query-timeout", 2, "Couchbase query operation timeout in seconds")
 	rootCmd.PersistentFlags().Int("couchbase-remove-timeout", 2, "Couchbase remove operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("couchbase-index-timeout", 5, "Couchbase index creation timeout in seconds")
+	rootCmd.PersistentFlags().Bool("couchbase-auto-create-index", true, "Automatically create Couchbase index on 'when' field")
 	rootCmd.PersistentFlags().String("mongodb-database", "timebridge", "MongoDB database name")
 	rootCmd.PersistentFlags().String("mongodb-collection", "messages", "MongoDB collection name")
 	rootCmd.PersistentFlags().String("mongodb-username", "", "MongoDB username")

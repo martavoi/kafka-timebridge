@@ -60,6 +60,9 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 		require.NoError(t, err, "Failed to write message")
 		require.NotNil(t, storedMessage, "Stored message should not be nil")
 
+		// Wait for eventual consistency (indexing delay)
+		time.Sleep(100 * time.Millisecond)
+
 		// Verify the stored message contains original data
 		assert.Equal(t, originalMessage.Key, storedMessage.Message.Key)
 		assert.Equal(t, originalMessage.Value, storedMessage.Message.Value)
@@ -163,6 +166,9 @@ func TestBackend_ReadBatch_Ordering(t *testing.T) {
 		require.NoError(t, err)
 		documentKeys = append(documentKeys, stored.Key)
 	}
+
+	// Wait for eventual consistency (indexing delay)
+	time.Sleep(100 * time.Millisecond)
 
 	// Clean up after test
 	defer func() {

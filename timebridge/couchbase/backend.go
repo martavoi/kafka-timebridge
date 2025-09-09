@@ -44,6 +44,25 @@ func (s *Backend) Connect() error {
 	}
 
 	s.cluster = cluster
+
+	// Create index on 'when' field for efficient queries (if enabled)
+	if s.cfg.AutoCreateIndex {
+		// Create index with IF NOT EXISTS to avoid errors for existing indexes
+		// Index naming convention: letters, digits, underscore, hash - must start with letter
+		indexName := "timebridge_when_idx"
+		indexQuery := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON `%s`.`%s`.`%s`(`when`)",
+			indexName, s.cfg.Bucket, s.cfg.Scope, s.cfg.Collection)
+
+		_, err = s.cluster.Query(indexQuery, &gocb.QueryOptions{
+			Timeout: time.Duration(s.cfg.IndexTimeout) * time.Second,
+		})
+		if err != nil {
+			// Index creation failed - this could indicate connection issues
+			// or insufficient permissions, so we should return the error
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -91,8 +110,11 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 	// Query only messages that are ready to be delivered (when <= now), ordered by when ASC (oldest first)
 	// Use Unix timestamp comparison for reliable results across timezones
 	nowUnix := time.Now().Unix()
-	query := fmt.Sprintf("SELECT META().id, `key`, `value`, `headers`, `when`, `where` FROM `%s` WHERE `when` <= %d ORDER BY `when` ASC LIMIT %d", collection.Name(), nowUnix, limit)
-	rows, err := scope.Query(query, &gocb.QueryOptions{
+	// Use full keyspace path: bucket.scope.collection
+	keyspace := fmt.Sprintf("`%s`.`%s`.`%s`", bucket.Name(), scope.Name(), collection.Name())
+	query := fmt.Sprintf("SELECT META().id, `key`, `value`, `headers`, `when`, `where` FROM %s WHERE `when` <= %d ORDER BY `when` ASC LIMIT %d", keyspace, nowUnix, limit)
+
+	rows, err := s.cluster.Query(query, &gocb.QueryOptions{
 		Timeout: time.Duration(s.cfg.QueryTimeout) * time.Second,
 	})
 	if err != nil {
