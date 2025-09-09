@@ -11,6 +11,7 @@ type Config struct {
 	Backend   string          `mapstructure:"backend"`
 	Kafka     KafkaConfig     `mapstructure:"kafka,"`
 	Couchbase CouchbaseConfig `mapstructure:"couchbase,"`
+	MongoDB   MongoDBConfig   `mapstructure:"mongodb,"`
 	Scheduler SchedulerConfig `mapstructure:"scheduler,"`
 	LogLevel  string          `mapstructure:"log_level"`
 	LogFormat string          `mapstructure:"log_format"`
@@ -38,6 +39,16 @@ func (c *Config) Load(cmd *cobra.Command) error {
 		viper.BindPFlag("couchbase.upsert_timeout", cmd.Flags().Lookup("couchbase-upsert-timeout"))
 		viper.BindPFlag("couchbase.query_timeout", cmd.Flags().Lookup("couchbase-query-timeout"))
 		viper.BindPFlag("couchbase.remove_timeout", cmd.Flags().Lookup("couchbase-remove-timeout"))
+		viper.BindPFlag("mongodb.database", cmd.Flags().Lookup("mongodb-database"))
+		viper.BindPFlag("mongodb.collection", cmd.Flags().Lookup("mongodb-collection"))
+		viper.BindPFlag("mongodb.username", cmd.Flags().Lookup("mongodb-username"))
+		viper.BindPFlag("mongodb.password", cmd.Flags().Lookup("mongodb-password"))
+		viper.BindPFlag("mongodb.connection_string", cmd.Flags().Lookup("mongodb-connection-string"))
+		viper.BindPFlag("mongodb.connect_timeout", cmd.Flags().Lookup("mongodb-connect-timeout"))
+		viper.BindPFlag("mongodb.write_timeout", cmd.Flags().Lookup("mongodb-write-timeout"))
+		viper.BindPFlag("mongodb.read_timeout", cmd.Flags().Lookup("mongodb-read-timeout"))
+		viper.BindPFlag("mongodb.delete_timeout", cmd.Flags().Lookup("mongodb-delete-timeout"))
+		viper.BindPFlag("mongodb.index_timeout", cmd.Flags().Lookup("mongodb-index-timeout"))
 		viper.BindPFlag("scheduler.max_batch_size", cmd.Flags().Lookup("scheduler-max-batch-size"))
 		viper.BindPFlag("scheduler.poll_interval_seconds", cmd.Flags().Lookup("scheduler-poll-interval-seconds"))
 	}
@@ -62,6 +73,16 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.BindEnv("couchbase.upsert_timeout", "COUCHBASE_UPSERT_TIMEOUT")
 	viper.BindEnv("couchbase.query_timeout", "COUCHBASE_QUERY_TIMEOUT")
 	viper.BindEnv("couchbase.remove_timeout", "COUCHBASE_REMOVE_TIMEOUT")
+	viper.BindEnv("mongodb.database", "MONGODB_DATABASE")
+	viper.BindEnv("mongodb.collection", "MONGODB_COLLECTION")
+	viper.BindEnv("mongodb.username", "MONGODB_USERNAME")
+	viper.BindEnv("mongodb.password", "MONGODB_PASSWORD")
+	viper.BindEnv("mongodb.connection_string", "MONGODB_CONNECTION_STRING")
+	viper.BindEnv("mongodb.connect_timeout", "MONGODB_CONNECT_TIMEOUT")
+	viper.BindEnv("mongodb.write_timeout", "MONGODB_WRITE_TIMEOUT")
+	viper.BindEnv("mongodb.read_timeout", "MONGODB_READ_TIMEOUT")
+	viper.BindEnv("mongodb.delete_timeout", "MONGODB_DELETE_TIMEOUT")
+	viper.BindEnv("mongodb.index_timeout", "MONGODB_INDEX_TIMEOUT")
 	viper.BindEnv("scheduler.max_batch_size", "SCHEDULER_MAX_BATCH_SIZE")
 	viper.BindEnv("scheduler.poll_interval_seconds", "SCHEDULER_POLL_INTERVAL_SECONDS")
 
@@ -83,6 +104,16 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.SetDefault("couchbase.upsert_timeout", 2)
 	viper.SetDefault("couchbase.query_timeout", 2)
 	viper.SetDefault("couchbase.remove_timeout", 2)
+	// MongoDB defaults - only used when backend is "mongodb"
+	viper.SetDefault("mongodb.database", "timebridge")
+	viper.SetDefault("mongodb.collection", "messages")
+	viper.SetDefault("mongodb.username", "")
+	viper.SetDefault("mongodb.connection_string", "mongodb://localhost:27017")
+	viper.SetDefault("mongodb.connect_timeout", 2)
+	viper.SetDefault("mongodb.write_timeout", 2)
+	viper.SetDefault("mongodb.read_timeout", 2)
+	viper.SetDefault("mongodb.delete_timeout", 2)
+	viper.SetDefault("mongodb.index_timeout", 5)
 	// Scheduler defaults
 	viper.SetDefault("scheduler.max_batch_size", 100)
 	viper.SetDefault("scheduler.poll_interval_seconds", 5)
@@ -129,4 +160,17 @@ type CouchbaseConfig struct {
 type SchedulerConfig struct {
 	MaxBatchSize        int `mapstructure:"max_batch_size"`
 	PollIntervalSeconds int `mapstructure:"poll_interval_seconds"`
+}
+
+type MongoDBConfig struct {
+	Database         string       `validate:"omitempty"`
+	Collection       string       `validate:"omitempty"`
+	Username         string       `validate:"omitempty"`
+	Password         SecretString `validate:"omitempty"`
+	ConnectionString string       `mapstructure:"connection_string" validate:"omitempty"`
+	ConnectTimeout   int          `mapstructure:"connect_timeout"`
+	WriteTimeout     int          `mapstructure:"write_timeout"`
+	ReadTimeout      int          `mapstructure:"read_timeout"`
+	DeleteTimeout    int          `mapstructure:"delete_timeout"`
+	IndexTimeout     int          `mapstructure:"index_timeout"`
 }

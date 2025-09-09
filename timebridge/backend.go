@@ -52,4 +52,5 @@ type Backend interface {
 const (
 	BackendMemory    = "memory"
 	BackendCouchbase = "couchbase"
+	BackendMongoDB   = "mongodb"
 )

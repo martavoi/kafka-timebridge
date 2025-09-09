@@ -6,6 +6,7 @@ import (
 	"kafka-timebridge/timebridge"
 	"kafka-timebridge/timebridge/couchbase"
 	"kafka-timebridge/timebridge/memory"
+	"kafka-timebridge/timebridge/mongodb"
 	"log"
 	"log/slog"
 	"os"
@@ -41,7 +42,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 
 	// Add configuration flags to root command
-	rootCmd.PersistentFlags().String("backend", "memory", "Backend type (memory, couchbase)")
+	rootCmd.PersistentFlags().String("backend", "memory", "Backend type (memory, couchbase, mongodb)")
 	rootCmd.PersistentFlags().String("kafka-brokers", "localhost:9092", "Kafka broker addresses")
 	rootCmd.PersistentFlags().String("kafka-topic", "timebridge", "Kafka topic name")
 	rootCmd.PersistentFlags().String("kafka-group-id", "timebridge", "Kafka consumer group ID")
@@ -60,6 +61,16 @@ func init() {
 	rootCmd.PersistentFlags().Int("couchbase-upsert-timeout", 2, "Couchbase upsert operation timeout in seconds")
 	rootCmd.PersistentFlags().Int("couchbase-query-timeout", 2, "Couchbase query operation timeout in seconds")
 	rootCmd.PersistentFlags().Int("couchbase-remove-timeout", 2, "Couchbase remove operation timeout in seconds")
+	rootCmd.PersistentFlags().String("mongodb-database", "timebridge", "MongoDB database name")
+	rootCmd.PersistentFlags().String("mongodb-collection", "messages", "MongoDB collection name")
+	rootCmd.PersistentFlags().String("mongodb-username", "", "MongoDB username")
+	rootCmd.PersistentFlags().String("mongodb-password", "", "MongoDB password")
+	rootCmd.PersistentFlags().String("mongodb-connection-string", "mongodb://localhost:27017", "MongoDB connection string")
+	rootCmd.PersistentFlags().Int("mongodb-connect-timeout", 10, "MongoDB connection timeout in seconds")
+	rootCmd.PersistentFlags().Int("mongodb-write-timeout", 5, "MongoDB write operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("mongodb-read-timeout", 5, "MongoDB read operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("mongodb-delete-timeout", 5, "MongoDB delete operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("mongodb-index-timeout", 30, "MongoDB index creation timeout in seconds")
 	rootCmd.PersistentFlags().Int("scheduler-max-batch-size", 100, "Maximum number of messages to process in one batch")
 	rootCmd.PersistentFlags().Int("scheduler-poll-interval-seconds", 5, "Polling interval in seconds for checking scheduled messages")
 }
@@ -120,6 +131,17 @@ func runMain(cmd *cobra.Command, args []string) {
 		)
 	}
 
+	// Only log MongoDB config if it's being used
+	if cfg.Backend == "mongodb" {
+		logger.Debug("MongoDB config",
+			"mongodb_database", cfg.MongoDB.Database,
+			"mongodb_collection", cfg.MongoDB.Collection,
+			"mongodb_username", cfg.MongoDB.Username,
+			"mongodb_password", cfg.MongoDB.Password,
+			"mongodb_connection_string", cfg.MongoDB.ConnectionString,
+		)
+	}
+
 	// Create backend based on configuration
 	var backend timebridge.Backend
 	switch cfg.Backend {
@@ -142,9 +164,25 @@ func runMain(cmd *cobra.Command, args []string) {
 		}
 
 		backend = cbBackend
+	case timebridge.BackendMongoDB:
+		logger.Info("Using MongoDB backend")
+		mongoBackend, err := mongodb.NewBackend(cfg.MongoDB)
+		if err != nil {
+			logger.Error("Failed to create MongoDB backend", "error", err)
+			return
+		}
+
+		logger.Debug("Connecting to MongoDB...")
+		err = mongoBackend.Connect()
+		if err != nil {
+			logger.Error("Failed to connect to MongoDB", "error", err)
+			return
+		}
+
+		backend = mongoBackend
 	default:
 		logger.Error("Unknown backend type", "backend", cfg.Backend,
-			"supported", []string{timebridge.BackendMemory, timebridge.BackendCouchbase})
+			"supported", []string{timebridge.BackendMemory, timebridge.BackendCouchbase, timebridge.BackendMongoDB})
 		return
 	}
 	defer backend.Close()

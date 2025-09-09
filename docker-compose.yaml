@@ -39,6 +39,19 @@ services:
       - couchbase-index:/opt/couchbase/var/lib/couchbase/indexes
       - couchbase-logs:/opt/couchbase/var/lib/couchbase/logs
 
+  mongodb:
+    image: mongo:7-jammy
+    hostname: mongodb
+    container_name: mongodb
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodb-data:/data/db
+    environment:
+      # No authentication by default for local development
+      # For production, you would set MONGO_INITDB_ROOT_USERNAME and MONGO_INITDB_ROOT_PASSWORD
+      MONGO_INITDB_DATABASE: timebridge
+
   timebridge:
     image: ghcr.io/martavoi/kafka-timebridge:latest
     hostname: timebridge
@@ -46,6 +59,7 @@ services:
     depends_on:
       - broker
       - couchbase
+      - mongodb
     environment:
       # Kafka Configuration (use container names, not localhost)
       KAFKA_BROKERS: broker:29092
@@ -63,6 +77,14 @@ services:
       COUCHBASE_COLLECTION: messages
       COUCHBASE_USERNAME: timebridge
       COUCHBASE_PASSWORD: 123456
+      
+      # MongoDB Configuration (use container name, not localhost)
+      # Uncomment and set BACKEND=mongodb to use MongoDB instead of Couchbase
+      # MONGODB_CONNECTION_STRING: mongodb://mongodb:27017
+      # MONGODB_DATABASE: timebridge
+      # MONGODB_COLLECTION: messages
+      # MONGODB_USERNAME: ""
+      # MONGODB_PASSWORD: ""
       
       # Scheduler Configuration
       SCHEDULER_MAX_BATCH_SIZE: 100
@@ -86,4 +108,8 @@ volumes:
   couchbase-index:
     driver: local
   couchbase-logs:
+    driver: local
+  
+  # MongoDB volume
+  mongodb-data:
     driver: local

@@ -35,7 +35,7 @@ Kafka Timebridge enables sophisticated delayed message scheduling in Kafka envir
 **Key Features:**
 - ⏰ Schedule message delivery from minutes to months in advance
 - 🛡️ **Highly durable** - with persistent backends like Couchbase and retry policies, messages won't be lost
-- 🗄️ Multiple storage backends: in-memory (default) and Couchbase
+- 🗄️ Multiple storage backends: in-memory (default), Couchbase, and MongoDB
 - 🔧 Simple header-based scheduling interface
 - ⚙️ **Flexible configuration** via environment variables and CLI flags
 - 🔒 SASL authentication support for secure Kafka clusters
@@ -83,6 +83,21 @@ docker run --rm \
   -e LOG_LEVEL=info \
   -e LOG_FORMAT=json \
   ghcr.io/martavoi/kafka-timebridge:latest
+
+# Run with MongoDB backend
+docker run --rm \
+  -e KAFKA_BROKERS=your-kafka:9092 \
+  -e KAFKA_TOPIC=timebridge \
+  -e KAFKA_GROUP_ID=timebridge \
+  -e BACKEND=mongodb \
+  -e MONGODB_CONNECTION_STRING=mongodb://your-mongodb:27017 \
+  -e MONGODB_DATABASE=timebridge \
+  -e MONGODB_COLLECTION=messages \
+  -e MONGODB_USERNAME=your-user \
+  -e MONGODB_PASSWORD=your-password \
+  -e LOG_LEVEL=info \
+  -e LOG_FORMAT=json \
+  ghcr.io/martavoi/kafka-timebridge:latest
 ```
 
 #### Available Images
@@ -99,7 +114,7 @@ graph TB
     WelcomeService[👋 User Registration<br/>Welcome flow]
     
     subgraph "Kafka Cluster"
-        TimebridgeTopic[📨 timebridge<br/>Kafka Topic]
+        TimebridgeTopic[📨 timebridge<br/> Topic]
         OrdersTopic[🛒 orders<br/>Topic]
         NotificationsTopic[📬 notifications<br/>Topic]
         EmailsTopic[📧 emails<br/>Topic]
@@ -175,6 +190,12 @@ graph TB
 - **Cons**: Requires Couchbase cluster setup
 - **Configuration**: See Couchbase settings below
 
+### MongoDB Backend (Recommended for Production)
+- **Purpose**: Production deployments requiring persistence and reliability
+- **Pros**: Native datetime support, persistent storage, scalable, high availability, JSON document model
+- **Cons**: Requires MongoDB cluster setup
+- **Configuration**: See MongoDB settings below
+
 ## Configuration
 
 Configure via environment variables or CLI flags. CLI flags override environment variables.
@@ -183,7 +204,7 @@ Configure via environment variables or CLI flags. CLI flags override environment
 
 | Environment Variable | CLI Flag | Default | Description |
 |---------------------|----------|---------|-------------|
-| `BACKEND` | `--backend` | `memory` | Storage backend (`memory`, `couchbase`) |
+| `BACKEND` | `--backend` | `memory` | Storage backend (`memory`, `couchbase`, `mongodb`) |
 | `LOG_LEVEL` | `--log-level` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | `LOG_FORMAT` | `--log-format` | `text` | Log format (`text`, `json`) |
 
@@ -212,6 +233,21 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `COUCHBASE_UPSERT_TIMEOUT` | `--couchbase-upsert-timeout` | `2` | Timeout in seconds for upsert operations |
 | `COUCHBASE_QUERY_TIMEOUT` | `--couchbase-query-timeout` | `2` | Timeout in seconds for query operations |
 | `COUCHBASE_REMOVE_TIMEOUT` | `--couchbase-remove-timeout` | `2` | Timeout in seconds for remove operations |
+
+### MongoDB Settings
+
+| Environment Variable | CLI Flag | Default | Description |
+|---------------------|----------|---------|-------------|
+| `MONGODB_CONNECTION_STRING` | `--mongodb-connection-string` | `mongodb://localhost:27017` | MongoDB connection string |
+| `MONGODB_DATABASE` | `--mongodb-database` | `timebridge` | Database name for message storage |
+| `MONGODB_COLLECTION` | `--mongodb-collection` | `messages` | Collection for storing messages |
+| `MONGODB_USERNAME` | `--mongodb-username` | | MongoDB username (optional) |
+| `MONGODB_PASSWORD` | `--mongodb-password` | | MongoDB password (optional) |
+| `MONGODB_CONNECT_TIMEOUT` | `--mongodb-connect-timeout` | `10` | Connection timeout in seconds |
+| `MONGODB_WRITE_TIMEOUT` | `--mongodb-write-timeout` | `5` | Timeout in seconds for write operations |
+| `MONGODB_READ_TIMEOUT` | `--mongodb-read-timeout` | `5` | Timeout in seconds for read operations |
+| `MONGODB_DELETE_TIMEOUT` | `--mongodb-delete-timeout` | `5` | Timeout in seconds for delete operations |
+| `MONGODB_INDEX_TIMEOUT` | `--mongodb-index-timeout` | `30` | Timeout in seconds for index creation |
 
 ### Scheduler Settings
 
@@ -319,8 +355,11 @@ kafka-timebridge help
 # Start with default configuration
 kafka-timebridge
 
-# Start with custom settings using CLI flags
+# Start with custom settings using CLI flags (Couchbase)
 kafka-timebridge --backend=couchbase --log-level=debug --kafka-brokers=kafka1:9092,kafka2:9092
+
+# Start with MongoDB backend
+kafka-timebridge --backend=mongodb --mongodb-connection-string=mongodb://localhost:27017 --log-level=debug
 
 # Check the version
 $ kafka-timebridge version
