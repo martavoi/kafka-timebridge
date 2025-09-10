@@ -90,7 +90,7 @@ func (a *Acceptor) Run(ctx context.Context) error {
 
 				when, where, headers, err := a.timebridgeHeaders(m.Headers)
 				if err != nil {
-					a.logger.Warn("Unable to recognize timebridge headers, skipping", "error", err)
+					a.logger.Warn("Unable to recognize timebridge headers, skipping", "error", err, "message_offset", m.TopicPartition.Offset)
 					continue
 				}
 
@@ -114,13 +114,19 @@ func (a *Acceptor) Run(ctx context.Context) error {
 				}
 
 				backoffStrategy := backoff.NewExponentialBackOff()
-				backoffStrategy.InitialInterval = 3 * time.Second
+				backoffStrategy.InitialInterval = 2 * time.Second
 				backoffStrategy.Multiplier = 1.5
-				backoffStrategy.MaxInterval = 5 * time.Minute
+				backoffStrategy.MaxInterval = 8 * time.Second
 
-				storedMessage, err := backoff.Retry(ctx, writeOp, backoff.WithBackOff(backoffStrategy), backoff.WithNotify(notify))
+				storedMessage, err := backoff.Retry(ctx, writeOp, backoff.WithBackOff(backoffStrategy), backoff.WithNotify(notify), backoff.WithMaxTries(5))
 				if err != nil {
-					logger.Error("Failed to write message to backend", "error", err)
+					logger.Error("Failed to write message to backend after retries",
+						"error", err,
+						"message_offset", m.TopicPartition.Offset,
+					)
+
+					// Store offset to prevent reprocessing this failed message
+					a.consumer.StoreMessage(m)
 					continue
 				}
 
