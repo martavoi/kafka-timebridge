@@ -116,7 +116,7 @@ graph TB
     
     subgraph "Kafka Cluster"
         TimebridgeTopic[📨 timebridge<br/> Topic]
-        ErrorTopic[🚨 timebridge-error<br/>Topic <small>(optional)</small>]
+        ErrorTopic[🚨 timebridge-error<br/>Topic - optional]
         OrdersTopic[🛒 orders<br/>Topic]
         NotificationsTopic[📬 notifications<br/>Topic]
         EmailsTopic[📧 emails<br/>Topic]
