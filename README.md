@@ -40,6 +40,7 @@ Kafka Timebridge enables sophisticated delayed message scheduling in Kafka envir
 - 🔒 SASL authentication support for secure Kafka clusters
 - 🐳 **Production-ready Docker images** - Alpine-based (~15MB), secure, and cloud-native optimized
 - 🔄 Graceful shutdown and error handling
+- 📨 **Optional error topic** - Failed messages can be sent to a dedicated error topic for later reprocessing
 
 **Use Cases:**
 - **Message retry policies** - Schedule failed messages for retry in an hour (e.g., consumer failures)
@@ -83,10 +84,11 @@ docker run --rm \
   -e LOG_FORMAT=json \
   ghcr.io/martavoi/kafka-timebridge:latest
 
-# Run with MongoDB backend
+# Run with MongoDB backend and error topic
 docker run --rm \
   -e KAFKA_BROKERS=your-kafka:9092 \
   -e KAFKA_TOPIC=timebridge \
+  -e KAFKA_ERROR_TOPIC=timebridge-error \
   -e KAFKA_GROUP_ID=timebridge \
   -e BACKEND=mongodb \
   -e MONGODB_CONNECTION_STRING=mongodb://your-mongodb:27017 \
@@ -114,6 +116,7 @@ graph TB
     
     subgraph "Kafka Cluster"
         TimebridgeTopic[📨 timebridge<br/> Topic]
+        ErrorTopic[🚨 timebridge-error<br/>Topic <small>(optional)</small>]
         OrdersTopic[🛒 orders<br/>Topic]
         NotificationsTopic[📬 notifications<br/>Topic]
         EmailsTopic[📧 emails<br/>Topic]
@@ -127,6 +130,7 @@ graph TB
     RetryConsumer[🔄 Order Consumer<br/>Retry processing]
     NotificationConsumer[🔔 Notification Service<br/>Send alerts]
     EmailConsumer[📨 Email Service<br/>Send emails]
+    ErrorRecoveryTool[🛠️ Error Recovery<br/>Manual/Automated]
     
     FailedConsumer -->|"Retry in 1 hour<br/>X-Timebridge-When: +1h<br/>X-Timebridge-Where: orders"| TimebridgeTopic
     SubscriptionService -->|"Alert before expiry<br/>X-Timebridge-When: expiry-7d<br/>X-Timebridge-Where: notifications"| TimebridgeTopic
@@ -135,6 +139,7 @@ graph TB
     TimebridgeTopic -->|Consume scheduled messages| Daemon
     Daemon -->|Store until delivery time| Backend
     Backend -->|Read ready messages| Daemon
+    Daemon -.->|"Backend write fails<br/>(with error metadata)"| ErrorTopic
     
     Daemon -->|"Retry failed order<br/>(scheduled time reached)"| OrdersTopic
     Daemon -->|"Send renewal reminder<br/>(7 days before expiry)"| NotificationsTopic
@@ -143,6 +148,8 @@ graph TB
     OrdersTopic -->|Process retried message| RetryConsumer
     NotificationsTopic -->|Send subscription alert| NotificationConsumer
     EmailsTopic -->|Send welcome email| EmailConsumer
+    ErrorTopic -.->|"Reprocess when backend healthy"| ErrorRecoveryTool
+    ErrorRecoveryTool -.->|"Resubmit to timebridge topic"| TimebridgeTopic
     
     style FailedConsumer fill:#ffebee
     style SubscriptionService fill:#e8f5e8
@@ -150,12 +157,14 @@ graph TB
     style Daemon fill:#f3e5f5
     style Backend fill:#e8f5e8
     style TimebridgeTopic fill:#fff3e0
+    style ErrorTopic fill:#ffebee
     style OrdersTopic fill:#fff3e0
     style NotificationsTopic fill:#fff3e0
     style EmailsTopic fill:#fff3e0
     style RetryConsumer fill:#e8f5e8
     style NotificationConsumer fill:#e8f5e8
     style EmailConsumer fill:#e8f5e8
+    style ErrorRecoveryTool fill:#ffebee
 ```
 
 ### Process Flow
@@ -167,13 +176,22 @@ graph TB
 2. **Store**: Timebridge daemon stores the message in configured backend until delivery time
 
 3. **Deliver**: At specified time, message is sent to destination topic
+4. **Error Handling**: If backend write fails after retries, optionally send to error topic
 
 ### Message Headers
+
+#### Timebridge Headers (for scheduling)
 
 | Header | Required | Format | Example |
 |--------|----------|---------|---------|
 | `X-Timebridge-When` | Yes | RFC3339 timestamp | `2024-12-25T10:00:00Z` |
 | `X-Timebridge-Where` | Yes | Destination topic name | `user-notifications` |
+
+#### Error Topic Headers (added automatically on failures)
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `X-Timebridge-Error` | Error message from backend | `connection refused` |
 
 ## Storage Backends
 
@@ -201,6 +219,7 @@ Configure via environment variables or CLI flags. CLI flags override environment
 |---------------------|----------|---------|-------------|
 | `KAFKA_BROKERS` | `--kafka-brokers` | `localhost:9092` | Kafka broker addresses (comma-separated) |
 | `KAFKA_TOPIC` | `--kafka-topic` | `timebridge` | Topic to listen for scheduled messages |
+| `KAFKA_ERROR_TOPIC` | `--kafka-error-topic` | | Error topic for failed messages (optional) |
 | `KAFKA_GROUP_ID` | `--kafka-group-id` | `timebridge` | Consumer group ID |
 | `KAFKA_USERNAME` | `--kafka-username` | | SASL username (optional) |
 | `KAFKA_PASSWORD` | `--kafka-password` | | SASL password (optional) |
@@ -358,9 +377,10 @@ kafka-timebridge --backend=mongodb \
   --mongodb-database=timebridge \
   --log-level=debug
 
-# Start with custom Kafka settings
+# Start with custom Kafka settings and error topic
 kafka-timebridge --kafka-brokers=kafka1:9092,kafka2:9092 \
   --kafka-topic=delayed-messages \
+  --kafka-error-topic=delayed-messages-errors \
   --kafka-group-id=my-timebridge
 
 # Check version
@@ -402,6 +422,7 @@ Flags:
       --kafka-sasl-mechanism string           Kafka SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
       --kafka-security-protocol string        Kafka security protocol (PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL) (default "PLAINTEXT")
       --kafka-topic string                    Kafka topic name (default "timebridge")
+      --kafka-error-topic string              Kafka error topic name (optional)
       --kafka-username string                 Kafka username
       --log-format string                     Log format (text, json) (default "text")
       --log-level string                      Log level (debug, info, warn, error, fatal) (default "info")

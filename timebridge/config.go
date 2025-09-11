@@ -23,6 +23,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 		viper.BindPFlag("backend", cmd.Flags().Lookup("backend"))
 		viper.BindPFlag("kafka.brokers", cmd.Flags().Lookup("kafka-brokers"))
 		viper.BindPFlag("kafka.topic", cmd.Flags().Lookup("kafka-topic"))
+		viper.BindPFlag("kafka.error_topic", cmd.Flags().Lookup("kafka-error-topic"))
 		viper.BindPFlag("kafka.group_id", cmd.Flags().Lookup("kafka-group-id"))
 		viper.BindPFlag("kafka.username", cmd.Flags().Lookup("kafka-username"))
 		viper.BindPFlag("kafka.password", cmd.Flags().Lookup("kafka-password"))
@@ -60,6 +61,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.BindEnv("backend", "BACKEND")
 	viper.BindEnv("kafka.brokers", "KAFKA_BROKERS")
 	viper.BindEnv("kafka.topic", "KAFKA_TOPIC")
+	viper.BindEnv("kafka.error_topic", "KAFKA_ERROR_TOPIC")
 	viper.BindEnv("kafka.groupid", "KAFKA_GROUP_ID")
 	viper.BindEnv("kafka.username", "KAFKA_USERNAME")
 	viper.BindEnv("kafka.password", "KAFKA_PASSWORD")
@@ -98,6 +100,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.SetDefault("log_format", "text")
 	viper.SetDefault("kafka.brokers", "localhost:9092")
 	viper.SetDefault("kafka.topic", "timebridge")
+	viper.SetDefault("kafka.error_topic", "")
 	viper.SetDefault("kafka.groupid", "timebridge")
 	viper.SetDefault("kafka.securityprotocol", "PLAINTEXT")
 	viper.SetDefault("kafka.saslmechanism", "")
@@ -147,6 +150,7 @@ func (s SecretString) String() string {
 type KafkaConfig struct {
 	Brokers          string `validate:"required,comma_separated_list"`
 	Topic            string `validate:"required"`
+	ErrorTopic       string `mapstructure:"error_topic" validate:"omitempty"`
 	GroupId          string `validate:"required"`
 	Username         string
 	Password         SecretString

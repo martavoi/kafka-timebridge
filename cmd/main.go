@@ -45,6 +45,7 @@ func init() {
 	rootCmd.PersistentFlags().String("backend", "memory", "Backend type (memory, couchbase, mongodb)")
 	rootCmd.PersistentFlags().String("kafka-brokers", "localhost:9092", "Kafka broker addresses")
 	rootCmd.PersistentFlags().String("kafka-topic", "timebridge", "Kafka topic name")
+	rootCmd.PersistentFlags().String("kafka-error-topic", "", "Kafka error topic name (optional)")
 	rootCmd.PersistentFlags().String("kafka-group-id", "timebridge", "Kafka consumer group ID")
 	rootCmd.PersistentFlags().String("kafka-username", "", "Kafka username")
 	rootCmd.PersistentFlags().String("kafka-password", "", "Kafka password")
@@ -115,6 +116,7 @@ func runMain(cmd *cobra.Command, args []string) {
 		"log_format", cfg.LogFormat,
 		"kafka_brokers", cfg.Kafka.Brokers,
 		"kafka_topic", cfg.Kafka.Topic,
+		"kafka_error_topic", cfg.Kafka.ErrorTopic,
 		"kafka_group_id", cfg.Kafka.GroupId,
 		"kafka_username", cfg.Kafka.Username,
 		"kafka_password", cfg.Kafka.Password,
@@ -234,15 +236,7 @@ func runMain(cmd *cobra.Command, args []string) {
 	}
 	logger.Debug("Successfully subscribed to topic", "topic", cfg.Kafka.Topic)
 
-	// Create acceptor with consumer and backend
-	acceptor, err := timebridge.NewAcceptor(logger, consumer, backend)
-	if err != nil {
-		log.Fatal("Failed to create acceptor:", err)
-	}
-
-	acceptorCtx, acceptorCancel := context.WithCancel(context.Background())
-	defer acceptorCancel()
-
+	// Create Kafka producer (needed for both scheduler and error topic)
 	producerConfig := &kafka.ConfigMap{
 		"bootstrap.servers": cfg.Kafka.Brokers,
 	}
@@ -258,6 +252,23 @@ func runMain(cmd *cobra.Command, args []string) {
 		return
 	}
 	defer producer.Close()
+
+	// Create acceptor with consumer and backend
+	var acceptor *timebridge.Acceptor
+	if cfg.Kafka.ErrorTopic != "" {
+		// Error topic configured - create acceptor with producer
+		acceptor, err = timebridge.NewAcceptorWithErrorTopic(logger, consumer, backend, producer, cfg.Kafka.ErrorTopic)
+		logger.Info("Error topic configured", "error_topic", cfg.Kafka.ErrorTopic)
+	} else {
+		// No error topic - create standard acceptor
+		acceptor, err = timebridge.NewAcceptor(logger, consumer, backend)
+	}
+	if err != nil {
+		log.Fatal("Failed to create acceptor:", err)
+	}
+
+	acceptorCtx, acceptorCancel := context.WithCancel(context.Background())
+	defer acceptorCancel()
 
 	scheduler := timebridge.NewScheduler(logger, backend, producer, cfg.Scheduler)
 

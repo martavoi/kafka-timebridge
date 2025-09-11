@@ -1,13 +1,14 @@
 {
+    "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug main.go",
+            "name": "Launch kafka-timebridge",
             "type": "go",
             "request": "launch",
-            "mode": "debug",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd",
             "envFile": "${workspaceFolder}/.env",
-            "program": "${workspaceFolder}/cmd/main.go",
-            "stopOnEntry": false,
+            "console": "integratedTerminal"
         }
     ]
 }

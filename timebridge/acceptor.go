@@ -14,19 +14,30 @@ const (
 	// Timebridge header names
 	HeaderTimebridgeWhen  = "X-Timebridge-When"
 	HeaderTimebridgeWhere = "X-Timebridge-Where"
+
+	// Error topic headers
+	HeaderTimebridgeError = "X-Timebridge-Error"
 )
 
 type Acceptor struct {
 	logger        *slog.Logger
 	consumer      *kafka.Consumer
 	backendWriter BackendWriter
+	producer      *kafka.Producer
+	errorTopic    string
 }
 
 func NewAcceptor(logger *slog.Logger, consumer *kafka.Consumer, backendWriter BackendWriter) (*Acceptor, error) {
+	return NewAcceptorWithErrorTopic(logger, consumer, backendWriter, nil, "")
+}
+
+func NewAcceptorWithErrorTopic(logger *slog.Logger, consumer *kafka.Consumer, backendWriter BackendWriter, producer *kafka.Producer, errorTopic string) (*Acceptor, error) {
 	return &Acceptor{
 		logger:        logger,
 		consumer:      consumer,
 		backendWriter: backendWriter,
+		producer:      producer,
+		errorTopic:    errorTopic,
 	}, nil
 }
 
@@ -73,6 +84,41 @@ func (a *Acceptor) timebridgeHeaders(headers []kafka.Header) (time.Time, string,
 	return when, where, messageHeaders, nil
 }
 
+// sendToErrorTopic sends the failed message to the error topic with additional error metadata
+func (a *Acceptor) sendToErrorTopic(m *kafka.Message, err error) {
+
+	// Create headers with original message headers plus error metadata
+	headers := make([]kafka.Header, len(m.Headers)+1)
+	copy(headers, m.Headers)
+
+	// Add error metadata header
+	headers = append(headers, kafka.Header{
+		Key:   HeaderTimebridgeError,
+		Value: []byte(err.Error()),
+	})
+
+	errorMsg := &kafka.Message{
+		TopicPartition: kafka.TopicPartition{Topic: &a.errorTopic, Partition: kafka.PartitionAny},
+		Key:            m.Key,
+		Value:          m.Value,
+		Headers:        headers,
+	}
+
+	// Send to error topic (fire and forget for simplicity)
+	if err := a.producer.Produce(errorMsg, nil); err != nil {
+		a.logger.Error("Failed to send message to error topic",
+			"error", err,
+			"error_topic", a.errorTopic,
+			"message_offset", m.TopicPartition.Offset,
+		)
+	} else {
+		a.logger.Info("Message sent to error topic",
+			"error_topic", a.errorTopic,
+			"message_offset", m.TopicPartition.Offset,
+		)
+	}
+}
+
 func (a *Acceptor) Run(ctx context.Context) error {
 	var run bool = true
 	for run {
@@ -90,7 +136,22 @@ func (a *Acceptor) Run(ctx context.Context) error {
 
 				when, where, headers, err := a.timebridgeHeaders(m.Headers)
 				if err != nil {
-					a.logger.Warn("Unable to recognize timebridge headers, skipping", "error", err, "message_offset", m.TopicPartition.Offset)
+					if a.producer != nil && a.errorTopic != "" {
+						a.sendToErrorTopic(m, err)
+						a.logger.Warn("Unable to recognize timebridge headers, moving message to the error topic",
+							"error", err,
+							"message_offset", m.TopicPartition.Offset,
+							"error_topic", a.errorTopic,
+						)
+					} else {
+						a.logger.Warn("Unable to recognize timebridge headers, skipping",
+							"error", err,
+							"message_offset", m.TopicPartition.Offset,
+						)
+					}
+
+					// Store offset to prevent reprocessing this invalid message
+					a.consumer.StoreMessage(m)
 					continue
 				}
 
@@ -124,6 +185,11 @@ func (a *Acceptor) Run(ctx context.Context) error {
 						"error", err,
 						"message_offset", m.TopicPartition.Offset,
 					)
+
+					// Send to error topic if configured
+					if a.producer != nil && a.errorTopic != "" {
+						a.sendToErrorTopic(m, err)
+					}
 
 					// Store offset to prevent reprocessing this failed message
 					a.consumer.StoreMessage(m)
