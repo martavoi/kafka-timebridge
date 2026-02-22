@@ -89,7 +89,7 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Job 3: build-binaries (matrix: amd64 + arm64)
-  # NOTE: ubuntu-24.04-arm64 is free for public repos; paid plan required for
+  # NOTE: ubuntu-24.04-arm is free for public repos; paid plan required for
   # private repos.
   # ---------------------------------------------------------------------------
   build-binaries:
@@ -103,7 +103,7 @@ jobs:
             runner: ubuntu-latest
             goarch: amd64
           - arch: arm64
-            runner: ubuntu-24.04-arm64
+            runner: ubuntu-24.04-arm
             goarch: arm64
     steps:
       - name: Checkout
@@ -187,7 +187,7 @@ jobs:
           - platform: linux/amd64
             runner: ubuntu-latest
           - platform: linux/arm64
-            runner: ubuntu-24.04-arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Prepare platform pair
         run: |
