@@ -2,7 +2,7 @@
 FROM golang:1.25-alpine AS builder
 
 # Install build dependencies including librdkafka
-RUN apk add --no-progress --no-cache gcc musl-dev
+RUN apk add --no-progress --no-cache gcc musl-dev librdkafka-dev pkgconf
 
 # Set working directory
 WORKDIR /app
@@ -10,7 +10,7 @@ WORKDIR /app
 # Copy go mod files
 COPY go.mod go.sum ./
 
-# Download dependencies with musl tag
+# Download dependencies
 RUN go mod download
 
 # Copy source code
@@ -19,8 +19,8 @@ COPY . .
 # Accept version as build argument
 ARG VERSION=dev
 
-# Build the application with musl tag and version
-RUN go build -tags musl -ldflags "-extldflags '-static' -s -w -X main.version=${VERSION}" -o kafka-timebridge ./cmd
+# Build the application
+RUN go build -tags dynamic -ldflags "-s -w -X main.version=${VERSION}" -o kafka-timebridge ./cmd
 
 # Final stage
 FROM alpine:latest
