@@ -30,11 +30,6 @@ jobs:
           go-version: '1.25'
           cache: true
 
-      - name: Install librdkafka-dev
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y librdkafka-dev
-
       - name: Run tests
         run: go test -short ./...
 
@@ -117,11 +112,6 @@ jobs:
           go-version: '1.25'
           cache: true
 
-      - name: Install librdkafka-dev
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y librdkafka-dev
-
       - name: Build binary
         env:
           VERSION: ${{ needs.semantic-release.outputs.version }}
@@ -129,7 +119,6 @@ jobs:
           mkdir -p dist
           CGO_ENABLED=1 GOOS=linux GOARCH=${{ matrix.goarch }} \
             go build \
-              -tags dynamic \
               -ldflags="-s -w -X main.version=${VERSION}" \
               -o dist/kafka-timebridge-linux-${{ matrix.arch }} \
               ./cmd
