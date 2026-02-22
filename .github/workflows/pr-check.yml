@@ -34,3 +34,41 @@ jobs:
             --from ${{ github.event.pull_request.base.sha }} \
             --to   ${{ github.event.pull_request.head.sha }} \
             --verbose
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install librdkafka-dev
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y librdkafka-dev
+
+      - name: Run tests
+        run: go test -short ./...
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install librdkafka-dev
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y librdkafka-dev
+
+      - name: Build binary
+        run: CGO_ENABLED=1 go build -o /dev/null ./cmd
