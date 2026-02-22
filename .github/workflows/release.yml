@@ -12,7 +12,11 @@ permissions:
   packages: write
 
 jobs:
-  release:
+
+  # ---------------------------------------------------------------------------
+  # Job 1: test
+  # ---------------------------------------------------------------------------
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,6 +28,30 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.25'
+
+      - name: Install librdkafka-dev
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y librdkafka-dev
+
+      - name: Run tests
+        run: go test -short ./...
+
+  # ---------------------------------------------------------------------------
+  # Job 2: semantic-release
+  # Outputs: version (e.g. "v1.2.3"), released ("true"/"false")
+  # ---------------------------------------------------------------------------
+  semantic-release:
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      released: ${{ steps.release.outputs.released }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,12 +66,130 @@ jobs:
             npm install
           fi
 
-      - name: Run tests
-        run: go test -short ./...
+      - name: Run semantic-release
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npx semantic-release
+
+          git fetch --tags
+
+          TAG=$(git tag --points-at HEAD 2>/dev/null | head -n1)
+          if [ -n "$TAG" ]; then
+            echo "released=true"  >> $GITHUB_OUTPUT
+            echo "version=${TAG}" >> $GITHUB_OUTPUT
+            echo "New release: ${TAG}"
+          else
+            echo "released=false" >> $GITHUB_OUTPUT
+            echo "version="       >> $GITHUB_OUTPUT
+            echo "No new release created."
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Job 3: build-binaries (matrix: amd64 + arm64)
+  # NOTE: ubuntu-24.04-arm64 is free for public repos; paid plan required for
+  # private repos.
+  # ---------------------------------------------------------------------------
+  build-binaries:
+    runs-on: ${{ matrix.runner }}
+    needs: semantic-release
+    if: needs.semantic-release.outputs.released == 'true'
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            goarch: amd64
+          - arch: arm64
+            runner: ubuntu-24.04-arm64
+            goarch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.semantic-release.outputs.version }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Install librdkafka-dev
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y librdkafka-dev
 
       - name: Build binary
+        env:
+          VERSION: ${{ needs.semantic-release.outputs.version }}
         run: |
-          CGO_ENABLED=1 go build -o kafka-timebridge ./cmd
+          mkdir -p dist
+          CGO_ENABLED=1 GOOS=linux GOARCH=${{ matrix.goarch }} \
+            go build \
+              -ldflags="-s -w -X main.version=${VERSION}" \
+              -o dist/kafka-timebridge-linux-${{ matrix.arch }} \
+              ./cmd
+
+      - name: Compress binary
+        run: |
+          cd dist
+          tar -czf kafka-timebridge-linux-${{ matrix.arch }}.tar.gz \
+              kafka-timebridge-linux-${{ matrix.arch }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-linux-${{ matrix.arch }}
+          path: dist/kafka-timebridge-linux-${{ matrix.arch }}.tar.gz
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # Job 4: upload-binaries
+  # ---------------------------------------------------------------------------
+  upload-binaries:
+    runs-on: ubuntu-latest
+    needs:
+      - semantic-release
+      - build-binaries
+    if: needs.semantic-release.outputs.released == 'true'
+    steps:
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-linux-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Upload binaries to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.semantic-release.outputs.version }}
+        run: |
+          ls -lh dist/
+          gh release upload "${VERSION}" dist/*.tar.gz \
+            --repo ${{ github.repository }} \
+            --clobber
+
+  # ---------------------------------------------------------------------------
+  # Job 5: docker (multi-arch: linux/amd64 + linux/arm64 via QEMU)
+  # No Dockerfile changes needed — -tags musl builds librdkafka from bundled
+  # source, making it transparent to QEMU emulation.
+  # ---------------------------------------------------------------------------
+  docker:
+    runs-on: ubuntu-latest
+    needs: semantic-release
+    if: needs.semantic-release.outputs.released == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.semantic-release.outputs.version }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -55,83 +201,46 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build release binaries
-        run: |
-          # Create release binaries for Linux AMD64 only
-          mkdir -p dist
-          
-          # Linux AMD64 (glibc - for Ubuntu/Debian/RHEL etc.)
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist/kafka-timebridge-linux-amd64 ./cmd
-          
-          # Compress binaries
-          cd dist
-          for binary in kafka-timebridge-*; do
-            tar -czf "${binary}.tar.gz" "${binary}"
-            rm "${binary}"
-          done
-
-      - name: Run semantic-release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
-
-      - name: Get version and rebuild with version
-        if: success()
-        id: version
-        run: |
-          # Get the version from the tag semantic-release just created
-          VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.1.0")
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Using version: ${VERSION}"
-          
-          # Rebuild binaries with version information
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X main.version=${VERSION}" -o dist/kafka-timebridge-linux-amd64 ./cmd
-          
-          # Re-compress with version
-          cd dist
-          for binary in kafka-timebridge-*; do
-            tar -czf "${binary}.tar.gz" "${binary}"
-            rm "${binary}"
-          done
-
-      - name: Upload release binaries
-        if: success()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          # Upload to release
-          if [ -n "$(git tag --points-at HEAD)" ]; then
-            gh release upload "${VERSION}" dist/*.tar.gz --clobber
-          fi
-
-      - name: Build and push Docker image
-        if: success()
+      - name: Build and push multi-arch Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           build-args: |
-            VERSION=${{ steps.version.outputs.version }}
+            VERSION=${{ needs.semantic-release.outputs.version }}
           tags: |
             ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository }}:${{ needs.semantic-release.outputs.version }}
           cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Update release notes with Docker info
-        if: success()
+  # ---------------------------------------------------------------------------
+  # Job 6: update-release-notes
+  # ---------------------------------------------------------------------------
+  update-release-notes:
+    runs-on: ubuntu-latest
+    needs:
+      - semantic-release
+      - upload-binaries
+      - docker
+    if: needs.semantic-release.outputs.released == 'true'
+    steps:
+      - name: Append Docker info to release notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.semantic-release.outputs.version }}
+          REPO: ${{ github.repository }}
         run: |
-          # Add Docker image information to release notes
-          if [ -n "$(git tag --points-at HEAD)" ]; then
-            gh release edit "${VERSION}" --notes-file - << EOF
-          $(gh release view "${VERSION}" --json body --jq .body)
-          
-          ## 🐳 Docker Image
-          
-          \`ghcr.io/${{ github.repository }}:${VERSION}\`
-          EOF
-          fi
+          CURRENT_BODY=$(gh release view "${VERSION}" \
+            --repo "${REPO}" \
+            --json body \
+            --jq '.body')
+
+          DOCKER_SECTION=$(printf '\n## Docker Image\n\n```\ndocker pull ghcr.io/%s:%s\n```\n\n**Supported platforms:** `linux/amd64`, `linux/arm64`\n' \
+            "${REPO}" "${VERSION}")
+
+          printf '%s%s' "${CURRENT_BODY}" "${DOCKER_SECTION}" | \
+            gh release edit "${VERSION}" \
+              --repo "${REPO}" \
+              --notes-file -
