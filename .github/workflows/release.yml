@@ -129,6 +129,7 @@ jobs:
           mkdir -p dist
           CGO_ENABLED=1 GOOS=linux GOARCH=${{ matrix.goarch }} \
             go build \
+              -tags dynamic \
               -ldflags="-s -w -X main.version=${VERSION}" \
               -o dist/kafka-timebridge-linux-${{ matrix.arch }} \
               ./cmd
