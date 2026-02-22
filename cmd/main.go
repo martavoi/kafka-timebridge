@@ -207,9 +207,12 @@ func runMain(cmd *cobra.Command, args []string) {
 	logger.Debug("Creating Kafka consumer...", "brokers", cfg.Kafka.Brokers, "group_id", cfg.Kafka.GroupId)
 
 	consumerConfig := &kafka.ConfigMap{
-		"bootstrap.servers": cfg.Kafka.Brokers,
-		"group.id":          cfg.Kafka.GroupId,
-		"auto.offset.reset": "earliest",
+		"bootstrap.servers":        cfg.Kafka.Brokers,
+		"group.id":                 cfg.Kafka.GroupId,
+		"auto.offset.reset":        "earliest",
+		"reconnect.backoff.ms":     "1000",
+		"reconnect.backoff.max.ms": "30000",
+		"go.logs.channel.enable":   true,
 	}
 
 	// Add authentication if credentials are provided
@@ -226,6 +229,11 @@ func runMain(cmd *cobra.Command, args []string) {
 		return
 	}
 	defer consumer.Close()
+	go func() {
+		for logEv := range consumer.Logs() {
+			logger.Debug("rdkafka", "name", logEv.Name, "tag", logEv.Tag, "message", logEv.Message)
+		}
+	}()
 
 	// Subscribe to topic
 	logger.Debug("Subscribing to topic...", "topic", cfg.Kafka.Topic)
@@ -238,7 +246,10 @@ func runMain(cmd *cobra.Command, args []string) {
 
 	// Create Kafka producer (needed for both scheduler and error topic)
 	producerConfig := &kafka.ConfigMap{
-		"bootstrap.servers": cfg.Kafka.Brokers,
+		"bootstrap.servers":        cfg.Kafka.Brokers,
+		"reconnect.backoff.ms":     "1000",
+		"reconnect.backoff.max.ms": "30000",
+		"go.logs.channel.enable":   true,
 	}
 	if cfg.Kafka.Username != "" && cfg.Kafka.Password.String() != "" {
 		producerConfig.SetKey("security.protocol", cfg.Kafka.SecurityProtocol)
@@ -252,6 +263,11 @@ func runMain(cmd *cobra.Command, args []string) {
 		return
 	}
 	defer producer.Close()
+	go func() {
+		for logEv := range producer.Logs() {
+			logger.Debug("rdkafka", "name", logEv.Name, "tag", logEv.Tag, "message", logEv.Message)
+		}
+	}()
 
 	// Create acceptor with consumer and backend
 	var acceptor *timebridge.Acceptor

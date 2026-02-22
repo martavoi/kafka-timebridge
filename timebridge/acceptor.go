@@ -201,7 +201,11 @@ func (a *Acceptor) Run(ctx context.Context) error {
 				a.consumer.StoreMessage(m)
 				logger.Info("Received scheduled message")
 			case kafka.Error:
-				a.logger.Error("Consumer error", "error", e)
+				if e.IsFatal() {
+					a.logger.Error("Consumer error", "error", e)
+				} else {
+					a.logger.Warn("Consumer error", "error", e)
+				}
 			default:
 				a.logger.Debug("Ignored event", "event", e)
 			}
