@@ -4,7 +4,7 @@ go 1.24.5
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3
-	github.com/confluentinc/confluent-kafka-go v1.9.2
+	github.com/confluentinc/confluent-kafka-go/v2 v2.13.0
 	github.com/couchbase/gocb/v2 v2.11.0
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.10.1
@@ -27,7 +27,7 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/klauspost/compress v1.16.7 // indirect
+	github.com/klauspost/compress v1.17.9 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sagikazarmark/locafero v0.10.0 // indirect
