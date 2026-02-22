@@ -58,17 +58,15 @@ services:
     container_name: timebridge
     depends_on:
       - broker
-      - couchbase
-      - mongodb
     environment:
       # Kafka Configuration (use container names, not localhost)
       KAFKA_BROKERS: broker:29092
       KAFKA_SECURITY_PROTOCOL: PLAINTEXT
       KAFKA_TOPIC: timebridge
       KAFKA_GROUP_ID: timebridge
-      
-      # Backend Configuration
-      BACKEND: couchbase
+
+      # Backend Configuration (override with BACKEND=mongodb or BACKEND=couchbase)
+      BACKEND: ${BACKEND:-memory}
       
       # Couchbase Configuration (use container name, not localhost)
       COUCHBASE_CONNECTION_STRING: couchbase://couchbase
