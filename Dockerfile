@@ -25,6 +25,10 @@ RUN go build -tags musl -ldflags "-extldflags '-static' -s -w -X main.version=${
 # Final stage
 FROM alpine:latest
 
+LABEL org.opencontainers.image.source="https://github.com/martavoi/kafka-timebridge"
+LABEL org.opencontainers.image.description="Kafka TimeBridge — time-based Kafka consumer offset seeking"
+LABEL org.opencontainers.image.licenses="MIT"
+
 # Install runtime dependencies including librdkafka
 RUN apk --no-cache add \
     ca-certificates \

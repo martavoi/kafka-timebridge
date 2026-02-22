@@ -295,10 +295,13 @@ jobs:
             --json body \
             --jq '.body')
 
-          DOCKER_SECTION=$(printf '\n## Docker Image\n\n```\ndocker pull ghcr.io/%s:%s\n```\n\n**Supported platforms:** `linux/amd64`, `linux/arm64`\n' \
+          DOWNLOADS_SECTION=$(printf '\n## Downloads\n\n| Platform | Binary |\n|----------|--------|\n| Linux amd64 | [kafka-timebridge-linux-amd64.tar.gz](https://github.com/%s/releases/download/%s/kafka-timebridge-linux-amd64.tar.gz) |\n| Linux arm64 | [kafka-timebridge-linux-arm64.tar.gz](https://github.com/%s/releases/download/%s/kafka-timebridge-linux-arm64.tar.gz) |\n' \
+            "${REPO}" "${VERSION}" "${REPO}" "${VERSION}")
+
+          DOCKER_SECTION=$(printf '\n## Docker\n\n```sh\ndocker pull ghcr.io/%s:%s\n```\n\n**Supported platforms:** `linux/amd64`, `linux/arm64`\n' \
             "${REPO}" "${VERSION}")
 
-          printf '%s%s' "${CURRENT_BODY}" "${DOCKER_SECTION}" | \
+          printf '%s%s%s' "${CURRENT_BODY}" "${DOWNLOADS_SECTION}" "${DOCKER_SECTION}" | \
             gh release edit "${VERSION}" \
               --repo "${REPO}" \
               --notes-file -
