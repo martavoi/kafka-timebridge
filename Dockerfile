@@ -1,8 +1,8 @@
 # Build stage
 FROM golang:1.25-alpine AS builder
 
-# Install build dependencies including librdkafka
-RUN apk add --no-progress --no-cache gcc musl-dev librdkafka-dev pkgconf
+# Install build dependencies (librdkafka is compiled from source bundled in the module)
+RUN apk add --no-progress --no-cache gcc musl-dev
 
 # Set working directory
 WORKDIR /app
@@ -20,7 +20,7 @@ COPY . .
 ARG VERSION=dev
 
 # Build the application
-RUN go build -tags dynamic -ldflags "-s -w -X main.version=${VERSION}" -o kafka-timebridge ./cmd
+RUN go build -tags musl -ldflags "-s -w -X main.version=${VERSION}" -o kafka-timebridge ./cmd
 
 # Final stage
 FROM alpine:latest
@@ -29,11 +29,9 @@ LABEL org.opencontainers.image.source="https://github.com/martavoi/kafka-timebri
 LABEL org.opencontainers.image.description="Kafka TimeBridge — time-based Kafka consumer offset seeking"
 LABEL org.opencontainers.image.licenses="MIT"
 
-# Install runtime dependencies including librdkafka
 RUN apk --no-cache add \
     ca-certificates \
-    tzdata \
-    librdkafka
+    tzdata
 
 # Create non-root user
 RUN addgroup -g 1001 timebridge && \
