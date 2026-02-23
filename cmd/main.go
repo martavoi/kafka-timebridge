@@ -77,6 +77,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("mongodb-auto-create-index", true, "Automatically create MongoDB index on 'when' field")
 	rootCmd.PersistentFlags().Int("scheduler-max-batch-size", 100, "Maximum number of messages to process in one batch")
 	rootCmd.PersistentFlags().Int("scheduler-poll-interval-seconds", 5, "Polling interval in seconds for checking scheduled messages")
+	rootCmd.PersistentFlags().Int("kafka-poll-timeout-ms", 500, "Kafka consumer poll timeout in milliseconds")
 }
 
 func main() {
@@ -122,6 +123,7 @@ func runMain(cmd *cobra.Command, args []string) {
 		"kafka_password", cfg.Kafka.Password,
 		"kafka_security_protocol", cfg.Kafka.SecurityProtocol,
 		"kafka_sasl_mechanism", cfg.Kafka.SaslMechanism,
+		"kafka_poll_timeout_ms", cfg.Kafka.PollTimeoutMs,
 	)
 
 	// Only log Couchbase config if it's being used
@@ -273,11 +275,11 @@ func runMain(cmd *cobra.Command, args []string) {
 	var acceptor *timebridge.Acceptor
 	if cfg.Kafka.ErrorTopic != "" {
 		// Error topic configured - create acceptor with producer
-		acceptor, err = timebridge.NewAcceptorWithErrorTopic(logger, consumer, backend, producer, cfg.Kafka.ErrorTopic)
+		acceptor, err = timebridge.NewAcceptorWithErrorTopic(logger, consumer, backend, producer, cfg.Kafka.ErrorTopic, cfg.Kafka.PollTimeoutMs)
 		logger.Info("Error topic configured", "error_topic", cfg.Kafka.ErrorTopic)
 	} else {
 		// No error topic - create standard acceptor
-		acceptor, err = timebridge.NewAcceptor(logger, consumer, backend)
+		acceptor, err = timebridge.NewAcceptor(logger, consumer, backend, cfg.Kafka.PollTimeoutMs)
 	}
 	if err != nil {
 		log.Fatal("Failed to create acceptor:", err)

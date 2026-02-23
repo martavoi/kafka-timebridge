@@ -29,6 +29,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 		viper.BindPFlag("kafka.password", cmd.Flags().Lookup("kafka-password"))
 		viper.BindPFlag("kafka.securityprotocol", cmd.Flags().Lookup("kafka-security-protocol"))
 		viper.BindPFlag("kafka.saslmechanism", cmd.Flags().Lookup("kafka-sasl-mechanism"))
+		viper.BindPFlag("kafka.poll_timeout_ms", cmd.Flags().Lookup("kafka-poll-timeout-ms"))
 		viper.BindPFlag("log_level", cmd.Flags().Lookup("log-level"))
 		viper.BindPFlag("log_format", cmd.Flags().Lookup("log-format"))
 		viper.BindPFlag("couchbase.bucket", cmd.Flags().Lookup("couchbase-bucket"))
@@ -67,6 +68,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.BindEnv("kafka.password", "KAFKA_PASSWORD")
 	viper.BindEnv("kafka.securityprotocol", "KAFKA_SECURITY_PROTOCOL")
 	viper.BindEnv("kafka.saslmechanism", "KAFKA_SASL_MECHANISM")
+	viper.BindEnv("kafka.poll_timeout_ms", "KAFKA_POLL_TIMEOUT_MS")
 	viper.BindEnv("log_level", "LOG_LEVEL")
 	viper.BindEnv("log_format", "LOG_FORMAT")
 	viper.BindEnv("couchbase.bucket", "COUCHBASE_BUCKET")
@@ -104,6 +106,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.SetDefault("kafka.groupid", "timebridge")
 	viper.SetDefault("kafka.securityprotocol", "PLAINTEXT")
 	viper.SetDefault("kafka.saslmechanism", "")
+	viper.SetDefault("kafka.poll_timeout_ms", 500)
 	// Couchbase defaults - only used when backend is "couchbase"
 	viper.SetDefault("couchbase.bucket", "timebridge")
 	viper.SetDefault("couchbase.scope", "timebridge")
@@ -156,6 +159,7 @@ type KafkaConfig struct {
 	Password         SecretString
 	SecurityProtocol string
 	SaslMechanism    string
+	PollTimeoutMs    int `mapstructure:"poll_timeout_ms"`
 }
 
 type CouchbaseConfig struct {

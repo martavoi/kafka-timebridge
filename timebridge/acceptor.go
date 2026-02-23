@@ -25,19 +25,21 @@ type Acceptor struct {
 	backendWriter BackendWriter
 	producer      *kafka.Producer
 	errorTopic    string
+	pollTimeoutMs int
 }
 
-func NewAcceptor(logger *slog.Logger, consumer *kafka.Consumer, backendWriter BackendWriter) (*Acceptor, error) {
-	return NewAcceptorWithErrorTopic(logger, consumer, backendWriter, nil, "")
+func NewAcceptor(logger *slog.Logger, consumer *kafka.Consumer, backendWriter BackendWriter, pollTimeoutMs int) (*Acceptor, error) {
+	return NewAcceptorWithErrorTopic(logger, consumer, backendWriter, nil, "", pollTimeoutMs)
 }
 
-func NewAcceptorWithErrorTopic(logger *slog.Logger, consumer *kafka.Consumer, backendWriter BackendWriter, producer *kafka.Producer, errorTopic string) (*Acceptor, error) {
+func NewAcceptorWithErrorTopic(logger *slog.Logger, consumer *kafka.Consumer, backendWriter BackendWriter, producer *kafka.Producer, errorTopic string, pollTimeoutMs int) (*Acceptor, error) {
 	return &Acceptor{
 		logger:        logger,
 		consumer:      consumer,
 		backendWriter: backendWriter,
 		producer:      producer,
 		errorTopic:    errorTopic,
+		pollTimeoutMs: pollTimeoutMs,
 	}, nil
 }
 
@@ -126,7 +128,7 @@ func (a *Acceptor) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			run = false
 		default:
-			ev := a.consumer.Poll(100)
+			ev := a.consumer.Poll(a.pollTimeoutMs)
 			if ev == nil {
 				continue
 			}
