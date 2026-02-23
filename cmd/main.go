@@ -77,7 +77,7 @@ func init() {
 	rootCmd.PersistentFlags().Bool("mongodb-auto-create-index", true, "Automatically create MongoDB index on 'when' field")
 	rootCmd.PersistentFlags().Int("scheduler-max-batch-size", 100, "Maximum number of messages to process in one batch")
 	rootCmd.PersistentFlags().Int("scheduler-poll-interval-seconds", 5, "Polling interval in seconds for checking scheduled messages")
-	rootCmd.PersistentFlags().Int("kafka-poll-timeout-ms", 500, "Kafka consumer poll timeout in milliseconds")
+	rootCmd.PersistentFlags().Int("kafka-poll-timeout-ms", 2000, "Kafka consumer poll timeout in milliseconds")
 }
 
 func main() {

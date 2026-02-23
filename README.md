@@ -225,6 +225,7 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `KAFKA_PASSWORD` | `--kafka-password` | | SASL password (optional) |
 | `KAFKA_SECURITY_PROTOCOL` | `--kafka-security-protocol` | `PLAINTEXT` | Security protocol |
 | `KAFKA_SASL_MECHANISM` | `--kafka-sasl-mechanism` | | SASL mechanism (only needed for SASL protocols) |
+| `KAFKA_POLL_TIMEOUT_MS` | `--kafka-poll-timeout-ms` | `2000` | Consumer poll timeout in milliseconds. Controls how long the consumer waits for events when idle. Increase to reduce log noise when brokers are unreachable. |
 
 ### Couchbase Settings
 
@@ -280,7 +281,7 @@ Here's what you'll see when running the daemon with `LOG_LEVEL=debug`:
 
 ```
 # Daemon startup and configuration
-time=2025-09-09T01:24:58.359+03:00 level=DEBUG msg="Config loaded" backend=couchbase log_level=debug log_format=text kafka_brokers=localhost:9092 kafka_topic=timebridge kafka_group_id=timebridge kafka_username="" kafka_password="" kafka_security_protocol=PLAINTEXT kafka_sasl_mechanism=""
+time=2025-09-09T01:24:58.359+03:00 level=DEBUG msg="Config loaded" backend=couchbase log_level=debug log_format=text kafka_brokers=localhost:9092 kafka_topic=timebridge kafka_group_id=timebridge kafka_username="" kafka_password="" kafka_security_protocol=PLAINTEXT kafka_sasl_mechanism="" kafka_poll_timeout_ms=2000
 time=2025-09-09T01:24:58.359+03:00 level=DEBUG msg="Couchbase config" couchbase_bucket=timebridge couchbase_scope=timebridge couchbase_collection=messages couchbase_username=timebridge couchbase_password=*** couchbase_connection_string=couchbase://localhost
 time=2025-09-09T01:24:58.359+03:00 level=INFO msg="Using Couchbase backend"
 time=2025-09-09T01:24:58.359+03:00 level=DEBUG msg="Connecting to Couchbase..."
@@ -419,6 +420,7 @@ Flags:
       --kafka-brokers string                  Kafka broker addresses (default "localhost:9092")
       --kafka-group-id string                 Kafka consumer group ID (default "timebridge")
       --kafka-password string                 Kafka password
+      --kafka-poll-timeout-ms int             Kafka consumer poll timeout in milliseconds (default 2000)
       --kafka-sasl-mechanism string           Kafka SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)
       --kafka-security-protocol string        Kafka security protocol (PLAINTEXT, SASL_PLAINTEXT, SASL_SSL, SSL) (default "PLAINTEXT")
       --kafka-topic string                    Kafka topic name (default "timebridge")

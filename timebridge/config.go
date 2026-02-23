@@ -106,7 +106,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.SetDefault("kafka.groupid", "timebridge")
 	viper.SetDefault("kafka.securityprotocol", "PLAINTEXT")
 	viper.SetDefault("kafka.saslmechanism", "")
-	viper.SetDefault("kafka.poll_timeout_ms", 500)
+	viper.SetDefault("kafka.poll_timeout_ms", 2000)
 	// Couchbase defaults - only used when backend is "couchbase"
 	viper.SetDefault("couchbase.bucket", "timebridge")
 	viper.SetDefault("couchbase.scope", "timebridge")
