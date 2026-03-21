@@ -444,3 +444,9 @@ Flags:
 
 Use "kafka-timebridge [command] --help" for more information about a command.
 ```
+
+## Dependency updates (maintainers)
+
+[Dependabot version updates](.github/dependabot.yml) run on a **weekly** schedule (Go modules, npm tooling, GitHub Actions, Docker).
+
+On GitHub, turn on **Dependabot alerts** and **Dependabot security updates** under **Settings → Code security and analysis** so vulnerability fixes can open PRs outside that weekly cadence.
