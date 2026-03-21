@@ -67,23 +67,52 @@ WIP
 fixed bug
 ```
 
-## Pull Request Process
+## Pull request checks
 
-1. Branch from `main`
-2. Make your changes with well-formed commits
-3. Open a PR — the `PR Check / commitlint` status check will validate every commit automatically
-4. All commits in the PR must pass before merging
+Pull requests targeting `main` run the GitHub Actions workflow **PR Check** (see [.github/workflows/pr-check.yml](.github/workflows/pr-check.yml)). Each job must succeed before merge.
 
-## Local Validation
+| Job | What it runs |
+|-----|----------------|
+| **lint** | [golangci-lint](https://golangci-lint.run/) on the repo (config: [.golangci.yml](.golangci.yml)), using Go **1.26** |
+| **commitlint** | Validates **every commit** in the PR (from base branch tip to PR head) against [commitlint.config.js](commitlint.config.js) |
+| **test** | `go test -short ./...` |
+| **build** | `CGO_ENABLED=1 go build -o /dev/null ./cmd` |
 
-After running `npm install`, you can validate your last commit locally:
+In the GitHub UI, these appear as separate checks under the **PR Check** workflow.
+
+## Pull request process
+
+1. Branch from `main`.
+2. Make your changes with well-formed commits (see above).
+3. Open a PR — all four jobs in **PR Check** must pass, including commitlint on the full commit range.
+
+## Local validation
+
+Mirror CI before you push:
+
+```sh
+# Lint (install: https://golangci-lint.run/welcome/install/ )
+golangci-lint run
+
+# Tests and build (match PR Check)
+go test -short ./...
+CGO_ENABLED=1 go build -o /dev/null ./cmd
+```
+
+**Commit messages** — after `npm install`, validate the last commit:
 
 ```sh
 npx commitlint --edit
 ```
 
-Or validate a specific commit message:
+Or a one-off message:
 
 ```sh
 echo "feat: my new feature" | npx commitlint
+```
+
+To approximate the PR commit range locally (full history required):
+
+```sh
+npx commitlint --from origin/main --to HEAD --verbose
 ```
