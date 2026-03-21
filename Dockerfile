@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 # Install build dependencies (librdkafka is compiled from source bundled in the module)
 RUN apk add --no-progress --no-cache gcc musl-dev
@@ -26,8 +26,8 @@ RUN go build -tags musl -ldflags "-s -w -X main.version=${VERSION}" -o kafka-tim
 FROM alpine:latest
 
 LABEL org.opencontainers.image.source="https://github.com/martavoi/kafka-timebridge"
-LABEL org.opencontainers.image.description="Kafka TimeBridge — time-based Kafka consumer offset seeking"
-LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.description="Kafka Timebridge — daemon for delayed Kafka delivery: consumes a scheduling topic, persists messages, and produces to destination topics at the configured time (memory, Couchbase, or MongoDB)"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 RUN apk --no-cache add \
     ca-certificates \
@@ -45,13 +45,6 @@ COPY --from=builder --chown=timebridge:timebridge /app/kafka-timebridge .
 
 # Switch to non-root user
 USER timebridge
-
-# Expose port (if needed for health checks)
-EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Run the application
 ENTRYPOINT ["./kafka-timebridge"]

@@ -337,7 +337,7 @@ Pre-compiled binaries are available for Linux AMD64:
 git clone https://github.com/martavoi/kafka-timebridge.git
 cd kafka-timebridge
 
-# Build (requires Go 1.24+ and CGO enabled)
+# Build (requires Go 1.26+ and CGO enabled)
 CGO_ENABLED=1 go build -o kafka-timebridge ./cmd
 
 # Run
