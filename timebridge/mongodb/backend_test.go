@@ -65,10 +65,10 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 
 		// Verify the stored message contains original data
 		assert.Equal(t, originalMessage.Key, storedMessage.Message.Key)
-		assert.Equal(t, originalMessage.Value, storedMessage.Message.Value)
-		assert.Equal(t, originalMessage.Headers, storedMessage.Message.Headers)
+		assert.Equal(t, originalMessage.Value, storedMessage.Value)
+		assert.Equal(t, originalMessage.Headers, storedMessage.Headers)
 		// Note: Not checking time equality due to MongoDB precision differences
-		assert.Equal(t, originalMessage.Where, storedMessage.Message.Where)
+		assert.Equal(t, originalMessage.Where, storedMessage.Where)
 
 		// Verify document key was generated
 		assert.NotEmpty(t, storedMessage.Key, "Document key should be generated")
@@ -93,15 +93,15 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 
 			// Verify all fields match
 			assert.Equal(t, originalMessage.Key, foundMessage.Message.Key)
-			assert.Equal(t, originalMessage.Value, foundMessage.Message.Value)
-			assert.Equal(t, len(originalMessage.Headers), len(foundMessage.Message.Headers))
-			assert.Equal(t, originalMessage.Where, foundMessage.Message.Where)
+			assert.Equal(t, originalMessage.Value, foundMessage.Value)
+			assert.Equal(t, len(originalMessage.Headers), len(foundMessage.Headers))
+			assert.Equal(t, originalMessage.Where, foundMessage.Where)
 
 			// Verify headers content
-			if len(originalMessage.Headers) == len(foundMessage.Message.Headers) {
+			if len(originalMessage.Headers) == len(foundMessage.Headers) {
 				for i, header := range originalMessage.Headers {
-					assert.Equal(t, header.Key, foundMessage.Message.Headers[i].Key)
-					assert.Equal(t, header.Value, foundMessage.Message.Headers[i].Value)
+					assert.Equal(t, header.Key, foundMessage.Headers[i].Key)
+					assert.Equal(t, header.Value, foundMessage.Headers[i].Value)
 				}
 			}
 		})
@@ -195,8 +195,8 @@ func TestBackend_ReadBatch_Ordering(t *testing.T) {
 		require.Len(t, ourMessages, 3, "Should find all our messages")
 
 		// Verify ordering (ASC by when - oldest first)
-		assert.True(t, ourMessages[0].Message.When.Before(ourMessages[1].Message.When), "First message should have earlier timestamp")
-		assert.True(t, ourMessages[1].Message.When.Before(ourMessages[2].Message.When), "Second message should have earlier timestamp than third")
+		assert.True(t, ourMessages[0].When.Before(ourMessages[1].When), "First message should have earlier timestamp")
+		assert.True(t, ourMessages[1].When.Before(ourMessages[2].When), "Second message should have earlier timestamp than third")
 	})
 }
 
@@ -233,10 +233,10 @@ func TestBackend_WriteWithoutKey(t *testing.T) {
 
 		// Verify the stored message
 		assert.Nil(t, storedMessage.Message.Key, "Key should remain nil")
-		assert.Equal(t, messageWithoutKey.Value, storedMessage.Message.Value)
-		assert.Equal(t, len(messageWithoutKey.Headers), len(storedMessage.Message.Headers))
-		assert.True(t, messageWithoutKey.When.Equal(storedMessage.Message.When))
-		assert.Equal(t, messageWithoutKey.Where, storedMessage.Message.Where)
+		assert.Equal(t, messageWithoutKey.Value, storedMessage.Value)
+		assert.Equal(t, len(messageWithoutKey.Headers), len(storedMessage.Headers))
+		assert.True(t, messageWithoutKey.When.Equal(storedMessage.When))
+		assert.Equal(t, messageWithoutKey.Where, storedMessage.Where)
 
 		// Cleanup
 		defer backend.Delete(ctx, storedMessage.Key)
@@ -273,10 +273,10 @@ func TestBackend_WriteEmptyMessage(t *testing.T) {
 
 		// Verify the stored message
 		assert.Equal(t, emptyMessage.Key, storedMessage.Message.Key)
-		assert.Equal(t, emptyMessage.Value, storedMessage.Message.Value)
-		assert.Empty(t, storedMessage.Message.Headers, "Headers should be empty")
-		assert.True(t, emptyMessage.When.Equal(storedMessage.Message.When))
-		assert.Equal(t, emptyMessage.Where, storedMessage.Message.Where)
+		assert.Equal(t, emptyMessage.Value, storedMessage.Value)
+		assert.Empty(t, storedMessage.Headers, "Headers should be empty")
+		assert.True(t, emptyMessage.When.Equal(storedMessage.When))
+		assert.Equal(t, emptyMessage.Where, storedMessage.Where)
 
 		// Cleanup
 		defer backend.Delete(ctx, storedMessage.Key)
@@ -389,7 +389,7 @@ func TestBackend_DateTimeHandling(t *testing.T) {
 
 			// MongoDB stores times in UTC, so compare in UTC
 			expectedUTC := message.When.UTC()
-			actualUTC := foundMessage.Message.When.UTC()
+			actualUTC := foundMessage.When.UTC()
 
 			// Allow for some precision loss (MongoDB stores milliseconds)
 			timeDiff := actualUTC.Sub(expectedUTC)

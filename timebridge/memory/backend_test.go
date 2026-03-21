@@ -43,10 +43,10 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 
 		// Verify the stored message contains original data
 		assert.Equal(t, originalMessage.Key, storedMessage.Message.Key)
-		assert.Equal(t, originalMessage.Value, storedMessage.Message.Value)
-		assert.Equal(t, originalMessage.Headers, storedMessage.Message.Headers)
-		assert.True(t, originalMessage.When.Equal(storedMessage.Message.When), "Times should be equal: expected %v, got %v", originalMessage.When, storedMessage.Message.When)
-		assert.Equal(t, originalMessage.Where, storedMessage.Message.Where)
+		assert.Equal(t, originalMessage.Value, storedMessage.Value)
+		assert.Equal(t, originalMessage.Headers, storedMessage.Headers)
+		assert.True(t, originalMessage.When.Equal(storedMessage.When), "Times should be equal: expected %v, got %v", originalMessage.When, storedMessage.When)
+		assert.Equal(t, originalMessage.Where, storedMessage.Where)
 
 		// Verify document key was generated
 		assert.NotEmpty(t, storedMessage.Key, "Document key should be generated")
@@ -69,16 +69,16 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 
 			// Verify all fields match
 			assert.Equal(t, originalMessage.Key, foundMessage.Message.Key)
-			assert.Equal(t, originalMessage.Value, foundMessage.Message.Value)
-			assert.Equal(t, len(originalMessage.Headers), len(foundMessage.Message.Headers))
-			assert.True(t, originalMessage.When.Equal(foundMessage.Message.When), "Times should be equal: expected %v, got %v", originalMessage.When, foundMessage.Message.When)
-			assert.Equal(t, originalMessage.Where, foundMessage.Message.Where)
+			assert.Equal(t, originalMessage.Value, foundMessage.Value)
+			assert.Equal(t, len(originalMessage.Headers), len(foundMessage.Headers))
+			assert.True(t, originalMessage.When.Equal(foundMessage.When), "Times should be equal: expected %v, got %v", originalMessage.When, foundMessage.When)
+			assert.Equal(t, originalMessage.Where, foundMessage.Where)
 
 			// Verify headers content
-			if len(originalMessage.Headers) == len(foundMessage.Message.Headers) {
+			if len(originalMessage.Headers) == len(foundMessage.Headers) {
 				for i, header := range originalMessage.Headers {
-					assert.Equal(t, header.Key, foundMessage.Message.Headers[i].Key)
-					assert.Equal(t, header.Value, foundMessage.Message.Headers[i].Value)
+					assert.Equal(t, header.Key, foundMessage.Headers[i].Key)
+					assert.Equal(t, header.Value, foundMessage.Headers[i].Value)
 				}
 			}
 		})
@@ -147,8 +147,8 @@ func TestBackend_ReadBatch_Ordering(t *testing.T) {
 		require.Len(t, results, 3, "Should find all our messages")
 
 		// Verify ordering (ASC by when) - oldest first (FIFO processing)
-		assert.True(t, results[0].Message.When.Before(results[1].Message.When), "First message should have earlier timestamp")
-		assert.True(t, results[1].Message.When.Before(results[2].Message.When), "Second message should have earlier timestamp than third")
+		assert.True(t, results[0].When.Before(results[1].When), "First message should have earlier timestamp")
+		assert.True(t, results[1].When.Before(results[2].When), "Second message should have earlier timestamp than third")
 
 		// Verify specific order: msg1 (-3h), msg2 (-2h), msg3 (-1h)
 		assert.Equal(t, []byte("msg1"), results[0].Message.Key)
@@ -200,10 +200,10 @@ func TestBackend_WriteWithoutKey(t *testing.T) {
 
 		// Verify the stored message
 		assert.Nil(t, storedMessage.Message.Key, "Key should remain nil")
-		assert.Equal(t, messageWithoutKey.Value, storedMessage.Message.Value)
-		assert.Equal(t, len(messageWithoutKey.Headers), len(storedMessage.Message.Headers))
-		assert.True(t, messageWithoutKey.When.Equal(storedMessage.Message.When))
-		assert.Equal(t, messageWithoutKey.Where, storedMessage.Message.Where)
+		assert.Equal(t, messageWithoutKey.Value, storedMessage.Value)
+		assert.Equal(t, len(messageWithoutKey.Headers), len(storedMessage.Headers))
+		assert.True(t, messageWithoutKey.When.Equal(storedMessage.When))
+		assert.Equal(t, messageWithoutKey.Where, storedMessage.Where)
 
 		// Verify storage count
 		assert.Equal(t, 1, backend.Len())
@@ -238,10 +238,10 @@ func TestBackend_WriteEmptyMessage(t *testing.T) {
 
 		// Verify the stored message
 		assert.Equal(t, emptyMessage.Key, storedMessage.Message.Key)
-		assert.Equal(t, emptyMessage.Value, storedMessage.Message.Value)
-		assert.Empty(t, storedMessage.Message.Headers, "Headers should be empty")
-		assert.True(t, emptyMessage.When.Equal(storedMessage.Message.When))
-		assert.Equal(t, emptyMessage.Where, storedMessage.Message.Where)
+		assert.Equal(t, emptyMessage.Value, storedMessage.Value)
+		assert.Empty(t, storedMessage.Headers, "Headers should be empty")
+		assert.True(t, emptyMessage.When.Equal(storedMessage.When))
+		assert.Equal(t, emptyMessage.Where, storedMessage.Where)
 
 		// Verify storage count
 		assert.Equal(t, 1, backend.Len())

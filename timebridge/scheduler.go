@@ -22,7 +22,7 @@ func NewScheduler(logger *slog.Logger, backend Backend, producer *kafka.Producer
 
 func (s *Scheduler) Run(ctx context.Context) error {
 
-	var run bool = true
+	run := true
 	for run {
 		select {
 		case <-ctx.Done():
@@ -64,7 +64,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 			// Create delivery channel for this batch
 			deliveryChan := make(chan kafka.Event, len(batch))
 
-			var producedCount int = 0
+			producedCount := 0
 			for _, message := range batch {
 				logger := s.logger.With("where", message.Where, "when", message.When, "backend_key", message.Key)
 				logger.Debug("Producing message...")
