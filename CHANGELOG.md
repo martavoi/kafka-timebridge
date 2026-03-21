@@ -1,3 +1,10 @@
+## [1.10.2](https://github.com/martavoi/kafka-timebridge/compare/v1.10.1...v1.10.2) (2026-03-21)
+
+
+### 🐛 Bug Fixes
+
+* **docker:** remove invalid healthcheck and update image metadata ([879e138](https://github.com/martavoi/kafka-timebridge/commit/879e138084975b71dc6ef18d22c79ded327869d7))
+
 ## [1.10.1](https://github.com/martavoi/kafka-timebridge/compare/v1.10.0...v1.10.1) (2026-02-23)
 
 
