@@ -63,10 +63,10 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 
 		// Verify the stored message contains original data
 		assert.Equal(t, originalMessage.Key, storedMessage.Message.Key)
-		assert.Equal(t, originalMessage.Value, storedMessage.Message.Value)
-		assert.Equal(t, originalMessage.Headers, storedMessage.Message.Headers)
-		assert.True(t, originalMessage.When.Equal(storedMessage.Message.When), "Times should be equal: expected %v, got %v", originalMessage.When, storedMessage.Message.When)
-		assert.Equal(t, originalMessage.Where, storedMessage.Message.Where)
+		assert.Equal(t, originalMessage.Value, storedMessage.Value)
+		assert.Equal(t, originalMessage.Headers, storedMessage.Headers)
+		assert.True(t, originalMessage.When.Equal(storedMessage.When), "Times should be equal: expected %v, got %v", originalMessage.When, storedMessage.When)
+		assert.Equal(t, originalMessage.Where, storedMessage.Where)
 
 		// Wait for eventual consistency (indexing delay)
 		time.Sleep(100 * time.Millisecond)
@@ -87,7 +87,7 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 			t.Logf("Original message when: %v (Unix: %d)", originalMessage.When, originalMessage.When.Unix())
 			t.Logf("Current time: %v (Unix: %d)", time.Now(), time.Now().Unix())
 			for i, msg := range messages {
-				t.Logf("Message %d: key=%s, when=%v", i, msg.Key, msg.Message.When)
+				t.Logf("Message %d: key=%s, when=%v", i, msg.Key, msg.When)
 			}
 
 			// Find our message in the batch
@@ -103,16 +103,16 @@ func TestBackend_WriteReadDelete(t *testing.T) {
 
 			// Verify all fields match
 			assert.Equal(t, originalMessage.Key, foundMessage.Message.Key)
-			assert.Equal(t, originalMessage.Value, foundMessage.Message.Value)
-			assert.Equal(t, len(originalMessage.Headers), len(foundMessage.Message.Headers))
+			assert.Equal(t, originalMessage.Value, foundMessage.Value)
+			assert.Equal(t, len(originalMessage.Headers), len(foundMessage.Headers))
 			// Note: Not checking time equality due to Unix timestamp precision differences
-			assert.Equal(t, originalMessage.Where, foundMessage.Message.Where)
+			assert.Equal(t, originalMessage.Where, foundMessage.Where)
 
 			// Verify headers content
-			if len(originalMessage.Headers) == len(foundMessage.Message.Headers) {
+			if len(originalMessage.Headers) == len(foundMessage.Headers) {
 				for i, header := range originalMessage.Headers {
-					assert.Equal(t, header.Key, foundMessage.Message.Headers[i].Key)
-					assert.Equal(t, header.Value, foundMessage.Message.Headers[i].Value)
+					assert.Equal(t, header.Key, foundMessage.Headers[i].Key)
+					assert.Equal(t, header.Value, foundMessage.Headers[i].Value)
 				}
 			}
 		})
@@ -197,7 +197,7 @@ func TestBackend_ReadBatch_Ordering(t *testing.T) {
 		t.Logf("Looking for document keys: %v", documentKeys)
 		t.Logf("ReadBatch returned %d messages", len(results))
 		for i, result := range results {
-			t.Logf("Result %d: key=%s, when=%v", i, result.Key, result.Message.When)
+			t.Logf("Result %d: key=%s, when=%v", i, result.Key, result.When)
 		}
 
 		// Find our messages in results
@@ -250,10 +250,10 @@ func TestBackend_WriteWithoutKey(t *testing.T) {
 
 		// Verify the stored message
 		assert.Nil(t, storedMessage.Message.Key, "Key should remain nil")
-		assert.Equal(t, messageWithoutKey.Value, storedMessage.Message.Value)
-		assert.Equal(t, len(messageWithoutKey.Headers), len(storedMessage.Message.Headers))
+		assert.Equal(t, messageWithoutKey.Value, storedMessage.Value)
+		assert.Equal(t, len(messageWithoutKey.Headers), len(storedMessage.Headers))
 		// Note: Not checking time equality due to Unix timestamp precision differences
-		assert.Equal(t, messageWithoutKey.Where, storedMessage.Message.Where)
+		assert.Equal(t, messageWithoutKey.Where, storedMessage.Where)
 
 		// Cleanup
 		defer backend.Delete(ctx, storedMessage.Key)
@@ -291,10 +291,10 @@ func TestBackend_WriteEmptyMessage(t *testing.T) {
 
 		// Verify the stored message
 		assert.Equal(t, emptyMessage.Key, storedMessage.Message.Key)
-		assert.Equal(t, emptyMessage.Value, storedMessage.Message.Value)
-		assert.Empty(t, storedMessage.Message.Headers, "Headers should be empty")
+		assert.Equal(t, emptyMessage.Value, storedMessage.Value)
+		assert.Empty(t, storedMessage.Headers, "Headers should be empty")
 		// Note: Not checking time equality due to Unix timestamp precision differences
-		assert.Equal(t, emptyMessage.Where, storedMessage.Message.Where)
+		assert.Equal(t, emptyMessage.Where, storedMessage.Where)
 
 		// Cleanup
 		defer backend.Delete(ctx, storedMessage.Key)

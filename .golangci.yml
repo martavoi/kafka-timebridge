@@ -1,0 +1,15 @@
+# https://golangci-lint.run/docs/configuration/file/
+# errcheck is disabled until a focused cleanup (viper/cobra, Kafka defers, tests).
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.26"
+
+linters:
+  default: standard
+  disable:
+    - errcheck
+  enable:
+    - bodyclose
+    - noctx

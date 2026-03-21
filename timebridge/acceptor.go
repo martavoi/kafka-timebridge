@@ -122,7 +122,7 @@ func (a *Acceptor) sendToErrorTopic(m *kafka.Message, err error) {
 }
 
 func (a *Acceptor) Run(ctx context.Context) error {
-	var run bool = true
+	run := true
 	for run {
 		select {
 		case <-ctx.Done():

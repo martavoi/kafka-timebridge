@@ -61,7 +61,7 @@ func (b *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 
 	// Sort by When field in ascending order (oldest first for FIFO processing)
 	sort.Slice(messages, func(i, j int) bool {
-		return messages[i].Message.When.Before(messages[j].Message.When)
+		return messages[i].When.Before(messages[j].When)
 	})
 
 	// Apply limit
