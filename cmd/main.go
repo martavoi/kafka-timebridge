@@ -53,6 +53,7 @@ func init() {
 	rootCmd.PersistentFlags().String("kafka-sasl-mechanism", "", "Kafka SASL mechanism (PLAIN, SCRAM-SHA-256, SCRAM-SHA-512)")
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error, fatal)")
 	rootCmd.PersistentFlags().String("log-format", "text", "Log format (text, json)")
+	rootCmd.PersistentFlags().Int("kafka-poll-timeout-ms", 2000, "Kafka consumer poll timeout in milliseconds")
 	rootCmd.PersistentFlags().String("couchbase-bucket", "timebridge", "Couchbase bucket name")
 	rootCmd.PersistentFlags().String("couchbase-scope", "timebridge", "Couchbase scope name")
 	rootCmd.PersistentFlags().String("couchbase-collection", "messages", "Couchbase collection name")
@@ -60,10 +61,11 @@ func init() {
 	rootCmd.PersistentFlags().String("couchbase-password", "", "Couchbase password")
 	rootCmd.PersistentFlags().String("couchbase-connection-string", "couchbase://localhost", "Couchbase connection string")
 	rootCmd.PersistentFlags().Int("couchbase-upsert-timeout", 2, "Couchbase upsert operation timeout in seconds")
-	rootCmd.PersistentFlags().Int("couchbase-query-timeout", 2, "Couchbase query operation timeout in seconds")
+	rootCmd.PersistentFlags().Int("couchbase-query-timeout", 3, "Couchbase query operation timeout in seconds")
 	rootCmd.PersistentFlags().Int("couchbase-remove-timeout", 2, "Couchbase remove operation timeout in seconds")
 	rootCmd.PersistentFlags().Int("couchbase-index-timeout", 5, "Couchbase index creation timeout in seconds")
 	rootCmd.PersistentFlags().Bool("couchbase-auto-create-index", true, "Automatically create Couchbase index on 'when' field")
+	rootCmd.PersistentFlags().Int("couchbase-claim-ttl-seconds", 30, "Claim TTL in seconds for distributed batch claiming (Couchbase); must exceed max batch processing time")
 	rootCmd.PersistentFlags().String("mongodb-database", "timebridge", "MongoDB database name")
 	rootCmd.PersistentFlags().String("mongodb-collection", "messages", "MongoDB collection name")
 	rootCmd.PersistentFlags().String("mongodb-username", "", "MongoDB username")
@@ -75,9 +77,9 @@ func init() {
 	rootCmd.PersistentFlags().Int("mongodb-delete-timeout", 2, "MongoDB delete operation timeout in seconds")
 	rootCmd.PersistentFlags().Int("mongodb-index-timeout", 5, "MongoDB index creation timeout in seconds")
 	rootCmd.PersistentFlags().Bool("mongodb-auto-create-index", true, "Automatically create MongoDB index on 'when' field")
+	rootCmd.PersistentFlags().Int("mongodb-claim-ttl-seconds", 30, "Claim TTL in seconds for distributed batch claiming (MongoDB); must exceed max batch processing time")
 	rootCmd.PersistentFlags().Int("scheduler-max-batch-size", 100, "Maximum number of messages to process in one batch")
 	rootCmd.PersistentFlags().Int("scheduler-poll-interval-seconds", 5, "Polling interval in seconds for checking scheduled messages")
-	rootCmd.PersistentFlags().Int("kafka-poll-timeout-ms", 2000, "Kafka consumer poll timeout in milliseconds")
 }
 
 func main() {

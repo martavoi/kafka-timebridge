@@ -43,6 +43,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 		viper.BindPFlag("couchbase.remove_timeout", cmd.Flags().Lookup("couchbase-remove-timeout"))
 		viper.BindPFlag("couchbase.index_timeout", cmd.Flags().Lookup("couchbase-index-timeout"))
 		viper.BindPFlag("couchbase.auto_create_index", cmd.Flags().Lookup("couchbase-auto-create-index"))
+		viper.BindPFlag("couchbase.claim_ttl_seconds", cmd.Flags().Lookup("couchbase-claim-ttl-seconds"))
 		viper.BindPFlag("mongodb.database", cmd.Flags().Lookup("mongodb-database"))
 		viper.BindPFlag("mongodb.collection", cmd.Flags().Lookup("mongodb-collection"))
 		viper.BindPFlag("mongodb.username", cmd.Flags().Lookup("mongodb-username"))
@@ -54,6 +55,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 		viper.BindPFlag("mongodb.delete_timeout", cmd.Flags().Lookup("mongodb-delete-timeout"))
 		viper.BindPFlag("mongodb.index_timeout", cmd.Flags().Lookup("mongodb-index-timeout"))
 		viper.BindPFlag("mongodb.auto_create_index", cmd.Flags().Lookup("mongodb-auto-create-index"))
+		viper.BindPFlag("mongodb.claim_ttl_seconds", cmd.Flags().Lookup("mongodb-claim-ttl-seconds"))
 		viper.BindPFlag("scheduler.max_batch_size", cmd.Flags().Lookup("scheduler-max-batch-size"))
 		viper.BindPFlag("scheduler.poll_interval_seconds", cmd.Flags().Lookup("scheduler-poll-interval-seconds"))
 	}
@@ -76,12 +78,13 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.BindEnv("couchbase.collection", "COUCHBASE_COLLECTION")
 	viper.BindEnv("couchbase.username", "COUCHBASE_USERNAME")
 	viper.BindEnv("couchbase.password", "COUCHBASE_PASSWORD")
-	viper.BindEnv("couchbase.connectionString", "COUCHBASE_CONNECTION_STRING")
+	viper.BindEnv("couchbase.connection_string", "COUCHBASE_CONNECTION_STRING")
 	viper.BindEnv("couchbase.upsert_timeout", "COUCHBASE_UPSERT_TIMEOUT")
 	viper.BindEnv("couchbase.query_timeout", "COUCHBASE_QUERY_TIMEOUT")
 	viper.BindEnv("couchbase.remove_timeout", "COUCHBASE_REMOVE_TIMEOUT")
 	viper.BindEnv("couchbase.index_timeout", "COUCHBASE_INDEX_TIMEOUT")
 	viper.BindEnv("couchbase.auto_create_index", "COUCHBASE_AUTO_CREATE_INDEX")
+	viper.BindEnv("couchbase.claim_ttl_seconds", "COUCHBASE_CLAIM_TTL_SECONDS")
 	viper.BindEnv("mongodb.database", "MONGODB_DATABASE")
 	viper.BindEnv("mongodb.collection", "MONGODB_COLLECTION")
 	viper.BindEnv("mongodb.username", "MONGODB_USERNAME")
@@ -93,6 +96,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.BindEnv("mongodb.delete_timeout", "MONGODB_DELETE_TIMEOUT")
 	viper.BindEnv("mongodb.index_timeout", "MONGODB_INDEX_TIMEOUT")
 	viper.BindEnv("mongodb.auto_create_index", "MONGODB_AUTO_CREATE_INDEX")
+	viper.BindEnv("mongodb.claim_ttl_seconds", "MONGODB_CLAIM_TTL_SECONDS")
 	viper.BindEnv("scheduler.max_batch_size", "SCHEDULER_MAX_BATCH_SIZE")
 	viper.BindEnv("scheduler.poll_interval_seconds", "SCHEDULER_POLL_INTERVAL_SECONDS")
 
@@ -112,12 +116,13 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.SetDefault("couchbase.scope", "timebridge")
 	viper.SetDefault("couchbase.collection", "messages")
 	viper.SetDefault("couchbase.username", "timebridge")
-	viper.SetDefault("couchbase.connectionString", "couchbase://localhost")
+	viper.SetDefault("couchbase.connection_string", "couchbase://localhost")
 	viper.SetDefault("couchbase.upsert_timeout", 2)
-	viper.SetDefault("couchbase.query_timeout", 2)
+	viper.SetDefault("couchbase.query_timeout", 3)
 	viper.SetDefault("couchbase.remove_timeout", 2)
 	viper.SetDefault("couchbase.index_timeout", 5)
 	viper.SetDefault("couchbase.auto_create_index", true)
+	viper.SetDefault("couchbase.claim_ttl_seconds", 30)
 	// MongoDB defaults - only used when backend is "mongodb"
 	viper.SetDefault("mongodb.database", "timebridge")
 	viper.SetDefault("mongodb.collection", "messages")
@@ -129,6 +134,7 @@ func (c *Config) Load(cmd *cobra.Command) error {
 	viper.SetDefault("mongodb.delete_timeout", 2)
 	viper.SetDefault("mongodb.index_timeout", 5)
 	viper.SetDefault("mongodb.auto_create_index", true)
+	viper.SetDefault("mongodb.claim_ttl_seconds", 30)
 	// Scheduler defaults
 	viper.SetDefault("scheduler.max_batch_size", 100)
 	viper.SetDefault("scheduler.poll_interval_seconds", 5)
@@ -168,12 +174,13 @@ type CouchbaseConfig struct {
 	Collection       string       `validate:"omitempty"`
 	Username         string       `validate:"omitempty"`
 	Password         SecretString `validate:"omitempty"`
-	ConnectionString string       `validate:"omitempty"`
+	ConnectionString string       `mapstructure:"connection_string" validate:"omitempty"`
 	UpsertTimeout    int          `mapstructure:"upsert_timeout"`
 	QueryTimeout     int          `mapstructure:"query_timeout"`
 	RemoveTimeout    int          `mapstructure:"remove_timeout"`
 	IndexTimeout     int          `mapstructure:"index_timeout"`
 	AutoCreateIndex  bool         `mapstructure:"auto_create_index"`
+	ClaimTTLSeconds  int          `mapstructure:"claim_ttl_seconds"`
 }
 
 type SchedulerConfig struct {
@@ -193,4 +200,5 @@ type MongoDBConfig struct {
 	DeleteTimeout    int          `mapstructure:"delete_timeout"`
 	IndexTimeout     int          `mapstructure:"index_timeout"`
 	AutoCreateIndex  bool         `mapstructure:"auto_create_index"`
+	ClaimTTLSeconds  int          `mapstructure:"claim_ttl_seconds"`
 }

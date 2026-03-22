@@ -3,11 +3,13 @@ package mongodb
 import (
 	"context"
 	"kafka-timebridge/timebridge"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // getTestConfig returns configuration for test MongoDB instance
@@ -20,10 +22,11 @@ func getTestConfig() timebridge.MongoDBConfig {
 		ConnectionString: "mongodb://localhost:27017",
 		ConnectTimeout:   2,
 		WriteTimeout:     2,
-		ReadTimeout:      2,
+		ReadTimeout:      10, // Increased to accommodate 3-step ReadBatch
 		DeleteTimeout:    2,
 		IndexTimeout:     5,
-		AutoCreateIndex:  true, // Enable for tests
+		AutoCreateIndex:  true,
+		ClaimTTLSeconds:  30,
 	}
 }
 
@@ -424,6 +427,145 @@ func TestBackend_WriteError_InvalidConfig(t *testing.T) {
 	// Connection should fail with invalid config
 	err = backend.Connect(ctx)
 	assert.Error(t, err, "Connection should fail with invalid config")
+}
+
+func TestBackend_ReadBatch_ConcurrentClaiming(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	ctx := context.Background()
+	cfg := getTestConfig()
+
+	// Two backend instances simulating two scheduler pods
+	backendA, err := NewBackend(cfg)
+	require.NoError(t, err)
+	require.NoError(t, backendA.Connect(ctx))
+	defer backendA.Close()
+
+	backendB, err := NewBackend(cfg)
+	require.NoError(t, err)
+	require.NoError(t, backendB.Connect(ctx))
+	defer backendB.Close()
+
+	// Seed 3 messages with when in the past
+	runID := "concurrent-test-" + time.Now().Format("20060102150405.999")
+	var seededKeys []string
+	for i := 0; i < 3; i++ {
+		stored, err := backendA.Write(ctx, timebridge.Message{
+			Key:   []byte(runID),
+			Value: []byte("test"),
+			When:  time.Now().Add(-1 * time.Hour),
+			Where: runID,
+		})
+		require.NoError(t, err)
+		seededKeys = append(seededKeys, stored.Key)
+	}
+	defer func() {
+		for _, k := range seededKeys {
+			backendA.Delete(ctx, k)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond) // allow index consistency
+
+	// Both backends call ReadBatch concurrently
+	var (
+		wg             sync.WaitGroup
+		batchA, batchB []timebridge.StoredMessage
+		errA, errB     error
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		batchA, errA = backendA.ReadBatch(ctx, 10)
+	}()
+	go func() {
+		defer wg.Done()
+		batchB, errB = backendB.ReadBatch(ctx, 10)
+	}()
+	wg.Wait() // happens-before: safe to read batchA/batchB/errA/errB after this
+
+	require.NoError(t, errA)
+	require.NoError(t, errB)
+
+	// Collect only our seeded keys from each batch
+	seededSet := make(map[string]bool, len(seededKeys))
+	for _, k := range seededKeys {
+		seededSet[k] = true
+	}
+
+	keysInA := make(map[string]bool)
+	for _, m := range batchA {
+		if seededSet[m.Key] {
+			keysInA[m.Key] = true
+		}
+	}
+	keysInB := make(map[string]bool)
+	for _, m := range batchB {
+		if seededSet[m.Key] {
+			keysInB[m.Key] = true
+		}
+	}
+
+	// Each seeded message must appear in exactly one batch
+	for _, k := range seededKeys {
+		inA, inB := keysInA[k], keysInB[k]
+		assert.False(t, inA && inB, "message %s claimed by both instances", k)
+	}
+	assert.Equal(t, len(seededKeys), len(keysInA)+len(keysInB), "all seeded messages must be claimed exactly once")
+}
+
+func TestBackend_ReadBatch_ExpiredLockRecovery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	ctx := context.Background()
+	cfg := getTestConfig()
+
+	cfg.ClaimTTLSeconds = 1 // short TTL so the simulated stale claim is expired
+	backend, err := NewBackend(cfg)
+	require.NoError(t, err)
+	require.NoError(t, backend.Connect(ctx))
+	defer backend.Close()
+
+	stored, err := backend.Write(ctx, timebridge.Message{
+		Key:   []byte("recovery-test"),
+		Value: []byte("test"),
+		When:  time.Now().Add(-1 * time.Hour),
+		Where: "recovery-dest",
+	})
+	require.NoError(t, err)
+	defer backend.Delete(ctx, stored.Key)
+
+	// Simulate a stale claim: set claimed_until to the past
+	_, err = backend.collection.UpdateOne(ctx,
+		bson.M{"_id": stored.Key},
+		bson.D{{Key: "$set", Value: bson.D{
+			{Key: "claimed_until", Value: time.Now().Add(-2 * time.Second).UTC()},
+			{Key: "claimed_by", Value: "stale-instance"},
+		}}},
+	)
+	require.NoError(t, err)
+
+	// A second backend instance should reclaim the message
+	backend2, err := NewBackend(cfg)
+	require.NoError(t, err)
+	require.NoError(t, backend2.Connect(ctx))
+	defer backend2.Close()
+
+	messages, err := backend2.ReadBatch(ctx, 10)
+	require.NoError(t, err)
+
+	var found bool
+	for _, m := range messages {
+		if m.Key == stored.Key {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "message with expired lock should be reclaimed and returned")
 }
 
 // TestBackend_ImplementsInterface verifies that Backend implements all required interfaces

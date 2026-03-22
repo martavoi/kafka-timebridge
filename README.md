@@ -78,7 +78,7 @@ docker run --rm \
   -e COUCHBASE_USERNAME=timebridge \
   -e COUCHBASE_PASSWORD=your-couchbase-password \
   -e COUCHBASE_UPSERT_TIMEOUT=2 \
-  -e COUCHBASE_QUERY_TIMEOUT=2 \
+  -e COUCHBASE_QUERY_TIMEOUT=3 \
   -e SCHEDULER_MAX_BATCH_SIZE=100 \
   -e SCHEDULER_POLL_INTERVAL_SECONDS=5 \
   -e LOG_LEVEL=info \
@@ -239,10 +239,11 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `COUCHBASE_USERNAME` | `--couchbase-username` | `timebridge` | Couchbase username |
 | `COUCHBASE_PASSWORD` | `--couchbase-password` | | Couchbase password |
 | `COUCHBASE_UPSERT_TIMEOUT` | `--couchbase-upsert-timeout` | `2` | Timeout in seconds for upsert operations |
-| `COUCHBASE_QUERY_TIMEOUT` | `--couchbase-query-timeout` | `2` | Timeout in seconds for query operations |
+| `COUCHBASE_QUERY_TIMEOUT` | `--couchbase-query-timeout` | `3` | Timeout in seconds for query operations |
 | `COUCHBASE_REMOVE_TIMEOUT` | `--couchbase-remove-timeout` | `2` | Timeout in seconds for remove operations |
 | `COUCHBASE_INDEX_TIMEOUT` | `--couchbase-index-timeout` | `5` | Timeout in seconds for index creation |
-| `COUCHBASE_AUTO_CREATE_INDEX` | `--couchbase-auto-create-index` | `true` | Automatically create index on 'when' field |
+| `COUCHBASE_AUTO_CREATE_INDEX` | `--couchbase-auto-create-index` | `true` | Automatically create compound index on `(when, claimed_until)` for efficient scheduled message queries |
+| `COUCHBASE_CLAIM_TTL_SECONDS` | `--couchbase-claim-ttl-seconds` | `30` | Claim TTL in seconds for distributed batch claiming; must exceed max batch processing time |
 
 ### MongoDB Settings
 
@@ -258,7 +259,8 @@ Configure via environment variables or CLI flags. CLI flags override environment
 | `MONGODB_READ_TIMEOUT` | `--mongodb-read-timeout` | `2` | Timeout in seconds for read operations |
 | `MONGODB_DELETE_TIMEOUT` | `--mongodb-delete-timeout` | `2` | Timeout in seconds for delete operations |
 | `MONGODB_INDEX_TIMEOUT` | `--mongodb-index-timeout` | `5` | Timeout in seconds for index creation |
-| `MONGODB_AUTO_CREATE_INDEX` | `--mongodb-auto-create-index` | `true` | Automatically create index on 'when' field |
+| `MONGODB_AUTO_CREATE_INDEX` | `--mongodb-auto-create-index` | `true` | Automatically create compound index on `(when, claimed_until)` for efficient scheduled message queries |
+| `MONGODB_CLAIM_TTL_SECONDS` | `--mongodb-claim-ttl-seconds` | `30` | Claim TTL in seconds for distributed batch claiming; must exceed max batch processing time |
 
 ### Scheduler Settings
 
@@ -407,10 +409,11 @@ Available Commands:
 Flags:
       --backend string                        Backend type (memory, couchbase, mongodb) (default "memory")
       --couchbase-bucket string               Couchbase bucket name (default "timebridge")
+      --couchbase-claim-ttl-seconds int       Claim TTL in seconds for distributed batch claiming (Couchbase); must exceed max batch processing time (default 30)
       --couchbase-collection string           Couchbase collection name (default "messages")
       --couchbase-connection-string string    Couchbase connection string (default "couchbase://localhost")
       --couchbase-password string             Couchbase password
-      --couchbase-query-timeout int           Couchbase query operation timeout in seconds (default 2)
+      --couchbase-query-timeout int           Couchbase query operation timeout in seconds (default 3)
       --couchbase-remove-timeout int          Couchbase remove operation timeout in seconds (default 2)
       --couchbase-index-timeout int           Couchbase index creation timeout in seconds (default 5)
       --couchbase-auto-create-index            Automatically create Couchbase index on 'when' field (default true)
@@ -429,6 +432,7 @@ Flags:
       --kafka-username string                 Kafka username
       --log-format string                     Log format (text, json) (default "text")
       --log-level string                      Log level (debug, info, warn, error, fatal) (default "info")
+      --mongodb-claim-ttl-seconds int         Claim TTL in seconds for distributed batch claiming (MongoDB); must exceed max batch processing time (default 30)
       --mongodb-collection string             MongoDB collection name (default "messages")
       --mongodb-connect-timeout int           MongoDB connection timeout in seconds (default 2)
       --mongodb-connection-string string      MongoDB connection string (default "mongodb://localhost:27017")

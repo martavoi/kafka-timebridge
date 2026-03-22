@@ -20,10 +20,11 @@ func getTestConfig() timebridge.CouchbaseConfig {
 		Password:         "123456",
 		ConnectionString: "couchbase://localhost",
 		UpsertTimeout:    2,
-		QueryTimeout:     2,
+		QueryTimeout:     6, // Increased to accommodate 2-step ReadBatch
 		RemoveTimeout:    2,
 		IndexTimeout:     5,
 		AutoCreateIndex:  true,
+		ClaimTTLSeconds:  30,
 	}
 }
 

@@ -83,12 +83,9 @@ services:
       COUCHBASE_PASSWORD: 123456
       
       # MongoDB Configuration (use container name, not localhost)
-      # Uncomment and set BACKEND=mongodb to use MongoDB instead of Couchbase
-      # MONGODB_CONNECTION_STRING: mongodb://mongodb:27017
-      # MONGODB_DATABASE: timebridge
-      # MONGODB_COLLECTION: messages
-      # MONGODB_USERNAME: ""
-      # MONGODB_PASSWORD: ""
+      MONGODB_CONNECTION_STRING: ${MONGODB_CONNECTION_STRING:-mongodb://mongodb:27017}
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-timebridge}
+      MONGODB_COLLECTION: ${MONGODB_COLLECTION:-messages}
       
       # Scheduler Configuration
       SCHEDULER_MAX_BATCH_SIZE: 100

@@ -16,11 +16,13 @@ type MessageHeader struct {
 }
 
 type MessageDocument struct {
-	Key     []byte          `json:"key"`
-	Value   []byte          `json:"value"`
-	Headers []MessageHeader `json:"headers"`
-	When    int64           `json:"when"` // Unix timestamp in seconds for reliable comparison
-	Where   string          `json:"where"`
+	Key          []byte          `json:"key"`
+	Value        []byte          `json:"value"`
+	Headers      []MessageHeader `json:"headers"`
+	When         int64           `json:"when"`          // Unix timestamp in seconds for reliable comparison
+	Where        string          `json:"where"`
+	ClaimedUntil int64           `json:"claimed_until"` // Unix timestamp; 0 = unclaimed
+	ClaimedBy    string          `json:"claimed_by"`    // batch claim UUID, "" when unclaimed
 }
 
 type Backend struct {
@@ -45,20 +47,18 @@ func (s *Backend) Connect() error {
 
 	s.cluster = cluster
 
-	// Create index on 'when' field for efficient queries (if enabled)
+	// Create indexes for efficient queries (if enabled)
 	if s.cfg.AutoCreateIndex {
-		// Create index with IF NOT EXISTS to avoid errors for existing indexes
-		// Index naming convention: letters, digits, underscore, hash - must start with letter
-		indexName := "timebridge_when_idx"
-		indexQuery := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON `%s`.`%s`.`%s`(`when`)",
-			indexName, s.cfg.Bucket, s.cfg.Scope, s.cfg.Collection)
+		keyspace := fmt.Sprintf("`%s`.`%s`.`%s`", s.cfg.Bucket, s.cfg.Scope, s.cfg.Collection)
 
-		_, err = s.cluster.Query(indexQuery, &gocb.QueryOptions{
+		// Hot-path: find unclaimed/re-claimable messages ready for delivery
+		idx := fmt.Sprintf(
+			"CREATE INDEX IF NOT EXISTS timebridge_when_claimed_idx ON %s(`when`, claimed_until)",
+			keyspace)
+		_, err = s.cluster.Query(idx, &gocb.QueryOptions{
 			Timeout: time.Duration(s.cfg.IndexTimeout) * time.Second,
 		})
 		if err != nil {
-			// Index creation failed - this could indicate connection issues
-			// or insufficient permissions, so we should return the error
 			return err
 		}
 	}
@@ -85,6 +85,7 @@ func (s *Backend) Write(ctx context.Context, m timebridge.Message) (*timebridge.
 		Headers: headers,
 		When:    m.When.Unix(), // Store as Unix timestamp for reliable comparison
 		Where:   m.Where,
+		// ClaimedUntil and ClaimedBy are zero values — document is unclaimed by default
 	}
 
 	key := uuid.New().String()
@@ -106,17 +107,85 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 	bucket := s.cluster.Bucket(s.cfg.Bucket)
 	scope := bucket.Scope(s.cfg.Scope)
 	collection := scope.Collection(s.cfg.Collection)
-
-	// Query only messages that are ready to be delivered (when <= now), ordered by when ASC (oldest first)
-	// Use Unix timestamp comparison for reliable results across timezones
-	nowUnix := time.Now().Unix()
-	// Use full keyspace path: bucket.scope.collection
 	keyspace := fmt.Sprintf("`%s`.`%s`.`%s`", bucket.Name(), scope.Name(), collection.Name())
-	query := fmt.Sprintf("SELECT META().id, `key`, `value`, `headers`, `when`, `where` FROM %s WHERE `when` <= %d ORDER BY `when` ASC LIMIT %d", keyspace, nowUnix, limit)
 
-	rows, err := s.cluster.Query(query, &gocb.QueryOptions{
-		Timeout: time.Duration(s.cfg.QueryTimeout) * time.Second,
-	})
+	nowUnix := time.Now().Unix()
+	claimedUntil := nowUnix + int64(s.cfg.ClaimTTLSeconds)
+	claimToken := uuid.New().String()
+	queryTimeout := time.Duration(s.cfg.QueryTimeout) * time.Second
+
+	// Step 1: Find candidate document IDs — ready and unclaimed/expired.
+	// claimed_until <= now covers both unclaimed (0) and expired claims.
+	candidateRows, err := s.cluster.Query(
+		fmt.Sprintf(
+			"SELECT META().id FROM %s "+
+				"WHERE `when` <= $now AND claimed_until <= $now "+
+				"ORDER BY `when` ASC LIMIT $limit",
+			keyspace),
+		&gocb.QueryOptions{
+			Timeout: queryTimeout,
+			NamedParameters: map[string]any{
+				"now":   nowUnix,
+				"limit": limit,
+			},
+		})
+	if err != nil {
+		return nil, err
+	}
+	defer candidateRows.Close()
+
+	var candidateIDs []string
+	for candidateRows.Next() {
+		var row struct {
+			ID string `json:"id"`
+		}
+		if err := candidateRows.Row(&row); err != nil {
+			return nil, err
+		}
+		candidateIDs = append(candidateIDs, row.ID)
+	}
+	if err := candidateRows.Err(); err != nil {
+		return nil, err
+	}
+	if len(candidateIDs) == 0 {
+		return nil, nil
+	}
+
+	// Step 2: Atomically claim — USE KEYS targets docs directly by ID;
+	// re-checking claimed_until <= now ensures concurrent instances claim disjoint subsets.
+	_, err = s.cluster.Query(
+		fmt.Sprintf(
+			"UPDATE %s USE KEYS $ids "+
+				"SET claimed_until = $claimedUntil, claimed_by = $claimToken "+
+				"WHERE claimed_until <= $now",
+			keyspace),
+		&gocb.QueryOptions{
+			Timeout: queryTimeout,
+			NamedParameters: map[string]any{
+				"ids":          candidateIDs,
+				"claimedUntil": claimedUntil,
+				"claimToken":   claimToken,
+				"now":          nowUnix,
+			},
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 3: Fetch documents claimed by this instance.
+	// USE KEYS limits to the candidate set; WHERE filters to only what we won.
+	rows, err := s.cluster.Query(
+		fmt.Sprintf(
+			"SELECT META().id, `key`, `value`, `headers`, `when`, `where` FROM %s "+
+				"USE KEYS $ids WHERE claimed_by = $claimToken ORDER BY `when` ASC",
+			keyspace),
+		&gocb.QueryOptions{
+			Timeout: queryTimeout,
+			NamedParameters: map[string]any{
+				"ids":        candidateIDs,
+				"claimToken": claimToken,
+			},
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -124,36 +193,31 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 
 	docs := make([]timebridge.StoredMessage, 0)
 	for rows.Next() {
-		// Structure to capture both document ID and content
-		// With SELECT META().id, *, the document fields are flattened at the top level
-		var QueryResultRow struct {
+		var row struct {
 			Id      string          `json:"id"`
 			Key     []byte          `json:"key"`
 			Value   []byte          `json:"value"`
 			Headers []MessageHeader `json:"headers"`
-			When    int64           `json:"when"` // Unix timestamp
+			When    int64           `json:"when"`
 			Where   string          `json:"where"`
 		}
-
-		err := rows.Row(&QueryResultRow)
-		if err != nil {
+		if err := rows.Row(&row); err != nil {
 			return nil, err
 		}
 
-		headers := make([]timebridge.Header, len(QueryResultRow.Headers))
-		for i, h := range QueryResultRow.Headers {
+		headers := make([]timebridge.Header, len(row.Headers))
+		for i, h := range row.Headers {
 			headers[i] = timebridge.Header(h)
 		}
-
 		docs = append(docs, timebridge.StoredMessage{
 			Message: timebridge.Message{
-				Key:     QueryResultRow.Key,
-				Value:   QueryResultRow.Value,
+				Key:     row.Key,
+				Value:   row.Value,
 				Headers: headers,
-				When:    time.Unix(QueryResultRow.When, 0).UTC(), // Convert Unix timestamp back to time.Time in UTC
-				Where:   QueryResultRow.Where,
+				When:    time.Unix(row.When, 0).UTC(),
+				Where:   row.Where,
 			},
-			Key: QueryResultRow.Id,
+			Key: row.Id,
 		})
 	}
 
