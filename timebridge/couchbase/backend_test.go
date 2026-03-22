@@ -412,6 +412,106 @@ func TestBackend_ReadBatch_ConcurrentClaiming(t *testing.T) {
 	assert.Equal(t, len(seededKeys), len(keysInA)+len(keysInB), "all seeded messages must be claimed exactly once")
 }
 
+// TestBackend_ReadBatch_FutureMessages verifies that messages scheduled for the future
+// are NOT returned by ReadBatch. Only messages with when <= now should be claimable.
+func TestBackend_ReadBatch_FutureMessages(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	cfg := getTestConfig()
+	backend, err := NewBackend(cfg)
+	require.NoError(t, err)
+
+	err = backend.Connect()
+	require.NoError(t, err)
+	defer backend.Close()
+
+	ctx := context.Background()
+
+	futureMessage := timebridge.Message{
+		Key:   []byte("future-msg"),
+		Value: []byte("future message"),
+		When:  time.Now().Add(2 * time.Hour),
+		Where: "future-dest",
+	}
+
+	stored, err := backend.Write(ctx, futureMessage)
+	require.NoError(t, err)
+	defer backend.Delete(ctx, stored.Key)
+
+	time.Sleep(100 * time.Millisecond) // allow index consistency
+
+	messages, err := backend.ReadBatch(ctx, 10)
+	require.NoError(t, err)
+
+	for _, msg := range messages {
+		assert.NotEqual(t, stored.Key, msg.Key, "Future message should not be returned by ReadBatch")
+	}
+}
+
+// TestBackend_ReadBatch_ExpiredLockRecovery simulates a stale claim (claimed_until in the past)
+// and verifies that a second backend instance can reclaim the message.
+func TestBackend_ReadBatch_ExpiredLockRecovery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	cfg := getTestConfig()
+	cfg.ClaimTTLSeconds = 1 // short TTL so the simulated stale claim is expired
+
+	backend, err := NewBackend(cfg)
+	require.NoError(t, err)
+	require.NoError(t, backend.Connect())
+	defer backend.Close()
+
+	ctx := context.Background()
+
+	stored, err := backend.Write(ctx, timebridge.Message{
+		Key:   []byte("recovery-test"),
+		Value: []byte("test"),
+		When:  time.Now().Add(-1 * time.Hour),
+		Where: "recovery-dest",
+	})
+	require.NoError(t, err)
+	defer backend.Delete(ctx, stored.Key)
+
+	// Simulate a stale claim by overwriting the document with claimed_until in the past.
+	// We're in package couchbase, so backend.cluster is accessible.
+	collection := backend.cluster.Bucket(cfg.Bucket).Scope(cfg.Scope).Collection(cfg.Collection)
+	staleDoc := MessageDocument{
+		Key:          []byte("recovery-test"),
+		Value:        []byte("test"),
+		Headers:      []MessageHeader{},
+		When:         time.Now().Add(-1 * time.Hour).Unix(),
+		Where:        "recovery-dest",
+		ClaimedUntil: time.Now().Add(-2 * time.Second).Unix(), // expired
+		ClaimedBy:    "stale-instance",
+	}
+	_, err = collection.Upsert(stored.Key, staleDoc, nil)
+	require.NoError(t, err)
+
+	time.Sleep(100 * time.Millisecond) // allow index consistency
+
+	// A second backend instance should reclaim the message
+	backend2, err := NewBackend(cfg)
+	require.NoError(t, err)
+	require.NoError(t, backend2.Connect())
+	defer backend2.Close()
+
+	messages, err := backend2.ReadBatch(ctx, 10)
+	require.NoError(t, err)
+
+	var found bool
+	for _, m := range messages {
+		if m.Key == stored.Key {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "message with expired lock should be reclaimed and returned")
+}
+
 // TestBackend_ImplementsInterface verifies that Backend implements all required interfaces
 func TestBackend_ImplementsInterface(t *testing.T) {
 	cfg := getTestConfig()
