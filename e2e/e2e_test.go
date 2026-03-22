@@ -1,7 +1,6 @@
 package e2e_test
 
 import (
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -12,17 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	brokerAddr = mustEnv("E2E_BROKER")
-	inputTopic = mustEnv("E2E_INPUT_TOPIC")
-	destTopic  = mustEnv("E2E_DEST_TOPIC")
-)
-
-func mustEnv(key string) string {
+func envOrSkip(t *testing.T, key string) string {
+	t.Helper()
 	v := os.Getenv(key)
 	if v == "" {
-		fmt.Fprintf(os.Stderr, "required env var %s is not set\n", key)
-		os.Exit(1)
+		t.Skipf("%s not set", key)
 	}
 	return v
 }
@@ -31,9 +24,9 @@ func mustEnv(key string) string {
 // topic scheduled 5 seconds in the future and asserts the message arrives on the destination
 // topic after the scheduled time, with timebridge headers stripped.
 func TestE2E_ScheduledDelivery(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping e2e test in short mode")
-	}
+	brokerAddr := envOrSkip(t, "E2E_BROKER")
+	inputTopic := envOrSkip(t, "E2E_INPUT_TOPIC")
+	destTopic := envOrSkip(t, "E2E_DEST_TOPIC")
 
 	runID := uuid.New().String()
 
