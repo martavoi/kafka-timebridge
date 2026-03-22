@@ -35,6 +35,7 @@ Kafka Timebridge enables sophisticated delayed message scheduling in Kafka envir
 - ⏰ Schedule message delivery from minutes to months in advance
 - 🛡️ **Highly durable** - with persistent backends like Couchbase and retry policies, messages won't be lost
 - 🗄️ Multiple storage backends: in-memory (default), Couchbase, and MongoDB
+- 🔀 **Horizontally scalable** - run multiple timebridge instances concurrently; atomic batch claiming prevents duplicate delivery
 - 🔧 Simple header-based scheduling interface
 - ⚙️ **Flexible configuration** via environment variables and CLI flags
 - 🔒 SASL authentication support for secure Kafka clusters
@@ -198,9 +199,20 @@ graph TB
 
 Timebridge supports three storage backends for different use cases:
 
-- **`memory`** (default) - In-memory storage for development and testing. Messages are lost on restart.
-- **`couchbase`** - Persistent Couchbase backend for production deployments. See [Couchbase Settings](#couchbase-settings).
-- **`mongodb`** - Persistent MongoDB backend for production deployments. See [MongoDB Settings](#mongodb-settings).
+- **`memory`** (default) - In-memory storage for development and testing. Messages are lost on restart. Does not support multiple instances.
+- **`couchbase`** - Persistent Couchbase backend for production deployments. Supports multiple concurrent instances. See [Couchbase Settings](#couchbase-settings).
+- **`mongodb`** - Persistent MongoDB backend for production deployments. Supports multiple concurrent instances. See [MongoDB Settings](#mongodb-settings).
+
+### Running Multiple Instances
+
+With a persistent backend (`couchbase` or `mongodb`), you can run multiple timebridge daemons against the same storage for high availability and increased throughput. Each instance uses atomic batch claiming — messages are locked with a `claimed_until` timestamp before processing, so no two instances deliver the same message.
+
+```bash
+# Example: scale to 2 instances with Docker Compose
+BACKEND=mongodb docker compose up --scale timebridge=2
+```
+
+The `--couchbase-claim-ttl-seconds` / `--mongodb-claim-ttl-seconds` setting (default `30`) controls how long a claim is held. If an instance crashes mid-batch, its claims expire automatically and another instance will pick up the work. Set this value above your maximum expected batch processing time.
 
 ## Configuration
 
