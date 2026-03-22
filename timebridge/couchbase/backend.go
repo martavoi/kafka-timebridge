@@ -114,76 +114,25 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 	claimToken := uuid.New().String()
 	queryTimeout := time.Duration(s.cfg.QueryTimeout) * time.Second
 
-	// Step 1: Find candidate document IDs — ready and unclaimed/expired.
-	// claimed_until <= now covers both unclaimed (0) and expired claims.
-	candidateRows, err := s.cluster.Query(
-		fmt.Sprintf(
-			"SELECT META().id FROM %s "+
-				"WHERE `when` <= $now AND claimed_until <= $now "+
-				"ORDER BY `when` ASC LIMIT $limit",
-			keyspace),
-		&gocb.QueryOptions{
-			Timeout: queryTimeout,
-			NamedParameters: map[string]any{
-				"now":   nowUnix,
-				"limit": limit,
-			},
-		})
-	if err != nil {
-		return nil, err
-	}
-	defer candidateRows.Close()
-
-	var candidateIDs []string
-	for candidateRows.Next() {
-		var row struct {
-			ID string `json:"id"`
-		}
-		if err := candidateRows.Row(&row); err != nil {
-			return nil, err
-		}
-		candidateIDs = append(candidateIDs, row.ID)
-	}
-	if err := candidateRows.Err(); err != nil {
-		return nil, err
-	}
-	if len(candidateIDs) == 0 {
-		return nil, nil
-	}
-
-	// Step 2: Atomically claim — USE KEYS targets docs directly by ID;
-	// re-checking claimed_until <= now ensures concurrent instances claim disjoint subsets.
-	_, err = s.cluster.Query(
-		fmt.Sprintf(
-			"UPDATE %s USE KEYS $ids "+
-				"SET claimed_until = $claimedUntil, claimed_by = $claimToken "+
-				"WHERE claimed_until <= $now",
-			keyspace),
-		&gocb.QueryOptions{
-			Timeout: queryTimeout,
-			NamedParameters: map[string]any{
-				"ids":          candidateIDs,
-				"claimedUntil": claimedUntil,
-				"claimToken":   claimToken,
-				"now":          nowUnix,
-			},
-		})
-	if err != nil {
-		return nil, err
-	}
-
-	// Step 3: Fetch documents claimed by this instance.
-	// USE KEYS limits to the candidate set; WHERE filters to only what we won.
+	// Single atomic UPDATE...RETURNING: claim and retrieve in one round-trip.
+	// ORDER BY `when` ASC with LIMIT is served by timebridge_when_claimed_idx.
+	// RETURNING only reflects documents actually mutated — concurrent instances
+	// that lose the per-document CAS race are excluded automatically.
 	rows, err := s.cluster.Query(
 		fmt.Sprintf(
-			"SELECT META().id, `key`, `value`, `headers`, `when`, `where` FROM %s "+
-				"USE KEYS $ids WHERE claimed_by = $claimToken ORDER BY `when` ASC",
+			"UPDATE %s "+
+				"SET claimed_until = $claimedUntil, claimed_by = $claimToken "+
+				"WHERE `when` <= $now AND claimed_until <= $now "+
+				"ORDER BY `when` ASC LIMIT $limit "+
+				"RETURNING META().id AS id, `key`, `value`, `headers`, `when`, `where`",
 			keyspace),
 		&gocb.QueryOptions{
 			Timeout: queryTimeout,
 			NamedParameters: map[string]any{
-				"ids":        candidateIDs,
-				"claimToken": claimToken,
+				"now":          nowUnix,
+				"limit":        limit,
+				"claimedUntil": claimedUntil,
+				"claimToken":   claimToken,
 			},
 		})
 	if err != nil {
@@ -191,7 +140,7 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 	}
 	defer rows.Close()
 
-	docs := make([]timebridge.StoredMessage, 0)
+	var docs []timebridge.StoredMessage
 	for rows.Next() {
 		var row struct {
 			Id      string          `json:"id"`
@@ -221,11 +170,7 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 		})
 	}
 
-	if rows.Err() != nil {
-		return nil, rows.Err()
-	}
-
-	return docs, nil
+	return docs, rows.Err()
 }
 
 func (s *Backend) Delete(ctx context.Context, key string) error {

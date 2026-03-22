@@ -3,6 +3,7 @@ package couchbase
 import (
 	"context"
 	"kafka-timebridge/timebridge"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func getTestConfig() timebridge.CouchbaseConfig {
 		Password:         "123456",
 		ConnectionString: "couchbase://localhost",
 		UpsertTimeout:    2,
-		QueryTimeout:     6, // Increased to accommodate 2-step ReadBatch
+		QueryTimeout:     6, // Sufficient for single-query UPDATE...RETURNING
 		RemoveTimeout:    2,
 		IndexTimeout:     5,
 		AutoCreateIndex:  true,
@@ -319,6 +320,96 @@ func TestBackend_WriteError_InvalidConfig(t *testing.T) {
 	// Connection should fail with invalid config
 	err = backend.Connect()
 	assert.Error(t, err, "Connection should fail with invalid config")
+}
+
+// TestBackend_ReadBatch_ConcurrentClaiming simulates two scheduler instances racing to claim
+// the same pool of messages. Each message must appear in exactly one instance's batch.
+// This validates the safety of the single-query UPDATE...RETURNING approach under concurrency.
+func TestBackend_ReadBatch_ConcurrentClaiming(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	ctx := context.Background()
+	cfg := getTestConfig()
+
+	// Two backend instances simulating two scheduler pods
+	backendA, err := NewBackend(cfg)
+	require.NoError(t, err)
+	require.NoError(t, backendA.Connect())
+	defer backendA.Close()
+
+	backendB, err := NewBackend(cfg)
+	require.NoError(t, err)
+	require.NoError(t, backendB.Connect())
+	defer backendB.Close()
+
+	// Seed 3 messages with when in the past
+	runID := "concurrent-test-" + time.Now().Format("20060102150405.999")
+	var seededKeys []string
+	for i := 0; i < 3; i++ {
+		stored, err := backendA.Write(ctx, timebridge.Message{
+			Key:   []byte(runID),
+			Value: []byte("test"),
+			When:  time.Now().Add(-1 * time.Hour),
+			Where: runID,
+		})
+		require.NoError(t, err)
+		seededKeys = append(seededKeys, stored.Key)
+	}
+	defer func() {
+		for _, k := range seededKeys {
+			backendA.Delete(ctx, k)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond) // allow index consistency
+
+	// Both backends call ReadBatch concurrently
+	var (
+		wg             sync.WaitGroup
+		batchA, batchB []timebridge.StoredMessage
+		errA, errB     error
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		batchA, errA = backendA.ReadBatch(ctx, 10)
+	}()
+	go func() {
+		defer wg.Done()
+		batchB, errB = backendB.ReadBatch(ctx, 10)
+	}()
+	wg.Wait()
+
+	require.NoError(t, errA)
+	require.NoError(t, errB)
+
+	// Collect only our seeded keys from each batch
+	seededSet := make(map[string]bool, len(seededKeys))
+	for _, k := range seededKeys {
+		seededSet[k] = true
+	}
+
+	keysInA := make(map[string]bool)
+	for _, m := range batchA {
+		if seededSet[m.Key] {
+			keysInA[m.Key] = true
+		}
+	}
+	keysInB := make(map[string]bool)
+	for _, m := range batchB {
+		if seededSet[m.Key] {
+			keysInB[m.Key] = true
+		}
+	}
+
+	// Each seeded message must appear in exactly one batch
+	for _, k := range seededKeys {
+		inA, inB := keysInA[k], keysInB[k]
+		assert.False(t, inA && inB, "message %s claimed by both instances", k)
+	}
+	assert.Equal(t, len(seededKeys), len(keysInA)+len(keysInB), "all seeded messages must be claimed exactly once")
 }
 
 // TestBackend_ImplementsInterface verifies that Backend implements all required interfaces
