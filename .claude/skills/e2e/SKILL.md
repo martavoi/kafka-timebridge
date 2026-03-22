@@ -1,7 +1,7 @@
 ---
 name: e2e
 description: Run the kafka-timebridge end-to-end tests. Use when the user asks to run e2e tests, integration tests, or wants to validate the full message lifecycle against a real Kafka broker.
-argument-hint: [--down-only]
+argument-hint: [--down-only] [--backend memory|mongodb|couchbase]
 allowed-tools: Bash
 ---
 
@@ -12,6 +12,11 @@ Before running, detect which compose tool is available:
 docker compose version 2>/dev/null && COMPOSE="docker compose" || COMPOSE="podman compose"
 ```
 Use `$COMPOSE` in place of `docker compose` for all commands below.
+
+## Backend Selection
+
+Parse `$ARGUMENTS` for `--backend <value>`. Default is `memory` if not specified.
+The backend affects which services to start (Step 2) and which env vars to pass (Step 4).
 
 ## Procedure
 
@@ -44,9 +49,49 @@ Then verify the sync worked (`date -u` on host and VM should match within 1–2 
 docker compose down -v
 ```
 
-**Step 2 — Start broker and wait for healthy:**
+**Step 2 — Start services:**
+
+| Backend | Command |
+|---------|---------|
+| `memory` (default) | `docker compose up -d --wait broker` |
+| `mongodb` | `docker compose up -d --wait broker mongodb` |
+| `couchbase` | `docker compose up -d --wait broker` then `docker compose up -d couchbase` |
+
+**Step 2.5 — Initialize Couchbase (only if `--backend couchbase`):**
+
+Couchbase requires cluster init and bucket/scope/collection creation via REST API:
+
 ```sh
-docker compose up -d --wait broker
+# Wait for REST API to be reachable (up to 60s)
+for i in $(seq 1 60); do
+  curl -sf http://localhost:8091/ui/index.html > /dev/null && break
+  sleep 1
+done
+
+# Initialize single-node cluster
+curl -sf -X POST http://localhost:8091/clusterInit \
+  -d 'hostname=localhost&dataPath=%2Fopt%2Fcouchbase%2Fvar%2Flib%2Fcouchbase%2Fdata&indexPath=%2Fopt%2Fcouchbase%2Fvar%2Flib%2Fcouchbase%2Fdata&services=kv%2Cn1ql%2Cindex&username=timebridge&password=123456&port=SAME'
+
+# Create bucket
+curl -sf -X POST http://localhost:8091/pools/default/buckets \
+  -u timebridge:123456 \
+  -d 'name=timebridge&bucketType=couchbase&ramQuota=256'
+
+# Wait for bucket readiness
+sleep 5
+
+# Create scope
+curl -sf -X POST http://localhost:8091/pools/default/buckets/timebridge/scopes \
+  -u timebridge:123456 \
+  -d 'name=timebridge'
+
+# Create collection
+curl -sf -X POST http://localhost:8091/pools/default/buckets/timebridge/scopes/timebridge/collections \
+  -u timebridge:123456 \
+  -d 'name=messages'
+
+# Wait for collection to be queryable
+sleep 3
 ```
 
 **Step 3 — Create topics:**
@@ -61,10 +106,14 @@ docker compose exec broker /opt/kafka/bin/kafka-topics.sh \
 ```
 
 **Step 4 — Build and start timebridge with fast poll interval:**
-```sh
-SCHEDULER_POLL_INTERVAL_SECONDS=1 LOG_LEVEL=debug KAFKA_TOPIC=timebridge \
-  docker compose up -d --build timebridge
-```
+
+| Backend | Command |
+|---------|---------|
+| `memory` (default) | `SCHEDULER_POLL_INTERVAL_SECONDS=1 LOG_LEVEL=debug KAFKA_TOPIC=timebridge docker compose up -d --build timebridge` |
+| `mongodb` | `BACKEND=mongodb SCHEDULER_POLL_INTERVAL_SECONDS=1 LOG_LEVEL=debug KAFKA_TOPIC=timebridge docker compose up -d --build timebridge` |
+| `couchbase` | `BACKEND=couchbase SCHEDULER_POLL_INTERVAL_SECONDS=1 LOG_LEVEL=debug KAFKA_TOPIC=timebridge docker compose up -d --build timebridge` |
+
+Note: The compose file already has all `MONGODB_*` and `COUCHBASE_*` connection env vars hardcoded for the timebridge service. Only `BACKEND` needs to change.
 
 **Step 5 — Run the tests:**
 ```sh
@@ -98,3 +147,5 @@ docker compose down -v
 **Messages silently dropped with "Broker: Invalid timestamp"**: Same root cause as above — clock skew. Run Step 0 and restart the stack.
 
 **Tests timeout with 0 messages received (poll interval)**: Check that `SCHEDULER_POLL_INTERVAL_SECONDS=1` was passed when starting timebridge (Step 4). Verify with `docker compose logs timebridge | grep "next_retry"` — it should show `next_retry=1s`.
+
+**Couchbase: "index not found" or "bucket not found"**: The Couchbase init in Step 2.5 may not have completed. Check `curl -s http://localhost:8091/pools/default/buckets -u timebridge:123456` and verify the bucket exists. Re-run Step 2.5 if needed.

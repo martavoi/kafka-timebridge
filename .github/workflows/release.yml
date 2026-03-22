@@ -35,11 +35,16 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Job 2: e2e — full message lifecycle test (produce → store → schedule → deliver)
+  # Runs against all three backends (memory, mongodb, couchbase) via matrix.
   # Runs only on main; heavier than PR checks but gates all releases.
   # ---------------------------------------------------------------------------
   e2e:
     runs-on: ubuntu-latest
     needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [memory, mongodb, couchbase]
     env:
       E2E_BROKER: localhost:9092
       E2E_INPUT_TOPIC: timebridge
@@ -57,6 +62,44 @@ jobs:
       - name: Start broker
         run: docker compose up -d --wait broker
 
+      - name: Start MongoDB
+        if: matrix.backend == 'mongodb'
+        run: docker compose up -d mongodb
+
+      - name: Start and initialize Couchbase
+        if: matrix.backend == 'couchbase'
+        run: |
+          docker compose up -d couchbase
+
+          # Wait for REST API to be reachable (up to 60s)
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:8091/ui/index.html > /dev/null && break
+            sleep 1
+          done
+
+          # Initialize single-node cluster
+          curl -sf -X POST http://localhost:8091/clusterInit \
+            -d 'hostname=localhost&dataPath=%2Fopt%2Fcouchbase%2Fvar%2Flib%2Fcouchbase%2Fdata&indexPath=%2Fopt%2Fcouchbase%2Fvar%2Flib%2Fcouchbase%2Fdata&services=kv%2Cn1ql%2Cindex&username=timebridge&password=123456&port=SAME'
+
+          # Create bucket
+          curl -sf -X POST http://localhost:8091/pools/default/buckets \
+            -u timebridge:123456 \
+            -d 'name=timebridge&bucketType=couchbase&ramQuota=256'
+
+          # Wait for bucket readiness
+          sleep 5
+
+          # Create scope and collection
+          curl -sf -X POST http://localhost:8091/pools/default/buckets/timebridge/scopes \
+            -u timebridge:123456 \
+            -d 'name=timebridge'
+          curl -sf -X POST http://localhost:8091/pools/default/buckets/timebridge/scopes/timebridge/collections \
+            -u timebridge:123456 \
+            -d 'name=messages'
+
+          # Wait for collection to be queryable
+          sleep 3
+
       - name: Create topics
         run: |
           docker compose exec broker /opt/kafka/bin/kafka-topics.sh \
@@ -68,11 +111,18 @@ jobs:
 
       - name: Start timebridge
         run: |
+          BACKEND=${{ matrix.backend }} \
           SCHEDULER_POLL_INTERVAL_SECONDS=1 LOG_LEVEL=debug KAFKA_TOPIC=$E2E_INPUT_TOPIC \
             docker compose up -d --build timebridge
 
       - name: Run e2e tests
         run: CGO_ENABLED=1 go test -v -timeout 120s -count=1 ./e2e/
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          docker compose logs timebridge
+          docker compose logs broker
 
       - name: Teardown
         if: always()
