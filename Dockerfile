@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26.1-alpine3.23 AS builder
 
 # Install build dependencies (librdkafka is compiled from source bundled in the module)
 RUN apk add --no-progress --no-cache gcc musl-dev
@@ -23,7 +23,7 @@ ARG VERSION=dev
 RUN go build -tags musl -ldflags "-s -w -X main.version=${VERSION}" -o kafka-timebridge ./cmd
 
 # Final stage
-FROM alpine:latest
+FROM alpine:3.23
 
 LABEL org.opencontainers.image.source="https://github.com/martavoi/kafka-timebridge"
 LABEL org.opencontainers.image.description="Kafka Timebridge — daemon for delayed Kafka delivery: consumes a scheduling topic, persists messages, and produces to destination topics at the configured time (memory, Couchbase, or MongoDB)"

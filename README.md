@@ -41,6 +41,7 @@ Kafka Timebridge enables sophisticated delayed message scheduling in Kafka envir
 - 🐳 **Production-ready Docker images** - Alpine-based (~15MB), secure, and cloud-native optimized
 - 🔄 Graceful shutdown and error handling
 - 📨 **Optional error topic** - Failed messages can be sent to a dedicated error topic for later reprocessing
+- ✅ **Automated e2e testing** - End-to-end tests run on every release, verifying the full scheduling lifecycle against a real Kafka broker
 
 **Use Cases:**
 - **Message retry policies** - Schedule failed messages for retry in an hour (e.g., consumer failures)

@@ -34,12 +34,57 @@ jobs:
         run: go test -short ./...
 
   # ---------------------------------------------------------------------------
-  # Job 2: semantic-release
+  # Job 2: e2e — full message lifecycle test (produce → store → schedule → deliver)
+  # Runs only on main; heavier than PR checks but gates all releases.
+  # ---------------------------------------------------------------------------
+  e2e:
+    runs-on: ubuntu-latest
+    needs: test
+    env:
+      E2E_BROKER: localhost:9092
+      E2E_INPUT_TOPIC: timebridge
+      E2E_DEST_TOPIC: e2e-destination
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Start broker
+        run: docker compose up -d --wait broker
+
+      - name: Create topics
+        run: |
+          docker compose exec broker /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 --create --if-not-exists \
+            --topic $E2E_INPUT_TOPIC --partitions 1 --replication-factor 1
+          docker compose exec broker /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 --create --if-not-exists \
+            --topic $E2E_DEST_TOPIC --partitions 1 --replication-factor 1
+
+      - name: Start timebridge
+        run: |
+          SCHEDULER_POLL_INTERVAL_SECONDS=1 LOG_LEVEL=debug KAFKA_TOPIC=$E2E_INPUT_TOPIC \
+            docker compose up -d --build timebridge
+
+      - name: Run e2e tests
+        run: CGO_ENABLED=1 go test -v -timeout 120s -count=1 ./e2e/
+
+      - name: Teardown
+        if: always()
+        run: docker compose down -v
+
+  # ---------------------------------------------------------------------------
+  # Job 3: semantic-release
   # Outputs: version (e.g. "v1.2.3"), released ("true"/"false")
   # ---------------------------------------------------------------------------
   semantic-release:
     runs-on: ubuntu-latest
-    needs: test
+    needs: [test, e2e]
     outputs:
       version: ${{ steps.release.outputs.version }}
       released: ${{ steps.release.outputs.released }}
@@ -83,7 +128,7 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # Job 3: build-binaries (matrix: amd64 + arm64)
+  # Job 4: build-binaries (matrix: amd64 + arm64)
   # NOTE: ubuntu-24.04-arm is free for public repos; paid plan required for
   # private repos.
   # ---------------------------------------------------------------------------
@@ -137,7 +182,7 @@ jobs:
           retention-days: 1
 
   # ---------------------------------------------------------------------------
-  # Job 4: upload-binaries
+  # Job 5: upload-binaries
   # ---------------------------------------------------------------------------
   upload-binaries:
     runs-on: ubuntu-latest
@@ -164,7 +209,7 @@ jobs:
             --clobber
 
   # ---------------------------------------------------------------------------
-  # Job 5: docker-build (matrix: native amd64 + arm64, no QEMU)
+  # Job 6: docker-build (matrix: native amd64 + arm64, no QEMU)
   # Each leg builds for its own platform natively and pushes by digest only.
   # ---------------------------------------------------------------------------
   docker-build:
@@ -227,7 +272,7 @@ jobs:
           retention-days: 1
 
   # ---------------------------------------------------------------------------
-  # Job 6: docker-merge — combine per-platform digests into a manifest list
+  # Job 7: docker-merge — combine per-platform digests into a manifest list
   # ---------------------------------------------------------------------------
   docker-merge:
     runs-on: ubuntu-latest
@@ -265,7 +310,7 @@ jobs:
             $(printf "${REPO}@sha256:%s " *)
 
   # ---------------------------------------------------------------------------
-  # Job 7: update-release-notes
+  # Job 8: update-release-notes
   # ---------------------------------------------------------------------------
   update-release-notes:
     runs-on: ubuntu-latest

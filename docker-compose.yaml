@@ -1,10 +1,15 @@
 services:
   broker:
-    image: apache/kafka:latest
+    image: apache/kafka:4.2.0
     hostname: broker
-    container_name: broker
     ports:
       - 9092:9092
+    healthcheck:
+      test: /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092
+      start_period: 15s
+      interval: 5s
+      timeout: 10s
+      retries: 10
     volumes:
       - kafka-data:/var/lib/kafka/data
     environment:
@@ -23,9 +28,8 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LOG_DIRS: /var/lib/kafka/data
   couchbase:
-    image: couchbase/server:latest
+    image: couchbase/server:7.6.5
     hostname: couchbase
-    container_name: couchbase
     ports:
       - 8091-8097:8091-8097  # Web Admin UI, REST API, and various services
       - 9123:9123            # Analytics service
@@ -40,9 +44,8 @@ services:
       - couchbase-logs:/opt/couchbase/var/lib/couchbase/logs
 
   mongodb:
-    image: mongo:7-jammy
+    image: mongo:7.0.20-jammy
     hostname: mongodb
-    container_name: mongodb
     ports:
       - 27017:27017
     volumes:
@@ -54,10 +57,13 @@ services:
 
   timebridge:
     image: ghcr.io/martavoi/kafka-timebridge:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     hostname: timebridge
-    container_name: timebridge
     depends_on:
-      - broker
+      broker:
+        condition: service_healthy
     environment:
       # Kafka Configuration (use container names, not localhost)
       KAFKA_BROKERS: broker:29092
@@ -86,10 +92,10 @@ services:
       
       # Scheduler Configuration
       SCHEDULER_MAX_BATCH_SIZE: 100
-      SCHEDULER_POLL_INTERVAL_SECONDS: 5
-      
+      SCHEDULER_POLL_INTERVAL_SECONDS: ${SCHEDULER_POLL_INTERVAL_SECONDS:-5}
+
       # Logging Configuration
-      LOG_LEVEL: info
+      LOG_LEVEL: ${LOG_LEVEL:-info}
       LOG_FORMAT: text
     restart: unless-stopped
 
