@@ -59,39 +59,46 @@ docker compose down -v
 
 **Step 2.5 — Initialize Couchbase (only if `--backend couchbase`):**
 
-Couchbase requires cluster init and bucket/scope/collection creation via REST API:
+Use `couchbase-cli` inside the container — more reliable than raw REST calls:
 
 ```sh
-# Wait for REST API to be reachable (up to 60s)
-for i in $(seq 1 60); do
-  curl -sf http://localhost:8091/ui/index.html > /dev/null && break
+# Wait for server to accept CLI commands (up to 90s)
+for i in $(seq 1 90); do
+  docker compose exec couchbase \
+    /opt/couchbase/bin/couchbase-cli server-info \
+      -c localhost -u Administrator -p password \
+    > /dev/null 2>&1 && break
   sleep 1
 done
 
-# Initialize single-node cluster
-curl -sf -X POST http://localhost:8091/clusterInit \
-  -d 'hostname=localhost&dataPath=%2Fopt%2Fcouchbase%2Fvar%2Flib%2Fcouchbase%2Fdata&indexPath=%2Fopt%2Fcouchbase%2Fvar%2Flib%2Fcouchbase%2Fdata&services=kv%2Cn1ql%2Cindex&username=timebridge&password=123456&port=SAME'
+# Initialize cluster
+docker compose exec couchbase \
+  /opt/couchbase/bin/couchbase-cli cluster-init \
+    -c localhost \
+    --cluster-username timebridge --cluster-password 123456 \
+    --services data,index,query \
+    --cluster-ramsize 512 --cluster-index-ramsize 256
 
-# Create bucket
-curl -sf -X POST http://localhost:8091/pools/default/buckets \
-  -u timebridge:123456 \
-  -d 'name=timebridge&bucketType=couchbase&ramQuota=256'
+# Create bucket (--wait blocks until bucket is ready)
+docker compose exec couchbase \
+  /opt/couchbase/bin/couchbase-cli bucket-create \
+    -c localhost -u timebridge -p 123456 \
+    --bucket timebridge --bucket-type couchbase \
+    --bucket-ramsize 256 --wait
 
-# Wait for bucket readiness
+# Create scope and collection
+docker compose exec couchbase \
+  /opt/couchbase/bin/couchbase-cli collection-manage \
+    -c localhost -u timebridge -p 123456 \
+    --bucket timebridge --create-scope timebridge
+
+docker compose exec couchbase \
+  /opt/couchbase/bin/couchbase-cli collection-manage \
+    -c localhost -u timebridge -p 123456 \
+    --bucket timebridge --create-collection timebridge.messages
+
+# Allow index service to settle
 sleep 5
-
-# Create scope
-curl -sf -X POST http://localhost:8091/pools/default/buckets/timebridge/scopes \
-  -u timebridge:123456 \
-  -d 'name=timebridge'
-
-# Create collection
-curl -sf -X POST http://localhost:8091/pools/default/buckets/timebridge/scopes/timebridge/collections \
-  -u timebridge:123456 \
-  -d 'name=messages'
-
-# Wait for collection to be queryable
-sleep 3
 ```
 
 **Step 3 — Create topics:**
@@ -148,4 +155,4 @@ docker compose down -v
 
 **Tests timeout with 0 messages received (poll interval)**: Check that `SCHEDULER_POLL_INTERVAL_SECONDS=1` was passed when starting timebridge (Step 4). Verify with `docker compose logs timebridge | grep "next_retry"` — it should show `next_retry=1s`.
 
-**Couchbase: "index not found" or "bucket not found"**: The Couchbase init in Step 2.5 may not have completed. Check `curl -s http://localhost:8091/pools/default/buckets -u timebridge:123456` and verify the bucket exists. Re-run Step 2.5 if needed.
+**Couchbase: "index not found" or "bucket not found"**: The Couchbase init in Step 2.5 may not have completed. Verify with `docker compose exec couchbase /opt/couchbase/bin/couchbase-cli bucket-list -c localhost -u timebridge -p 123456`. Re-run Step 2.5 if the bucket is absent.
