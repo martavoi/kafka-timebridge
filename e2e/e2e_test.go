@@ -11,6 +11,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// e2eEnv holds required env vars for e2e tests, skipping if any are absent.
+func e2eEnv(t *testing.T) (brokerAddr, inputTopic, destTopic string) {
+	t.Helper()
+	var ok bool
+	brokerAddr, ok = os.LookupEnv("E2E_BROKER")
+	if !ok {
+		t.Skip("E2E_BROKER not set")
+	}
+	inputTopic, ok = os.LookupEnv("E2E_INPUT_TOPIC")
+	if !ok {
+		t.Skip("E2E_INPUT_TOPIC not set")
+	}
+	destTopic, ok = os.LookupEnv("E2E_DEST_TOPIC")
+	if !ok {
+		t.Skip("E2E_DEST_TOPIC not set")
+	}
+	return
+}
+
 // TestE2E_NoDuplicates produces 5 messages and asserts each arrives on the destination topic exactly once.
 // It runs against a single instance. To validate the multi-instance concurrency fix, run it with
 // two timebridge instances active (e.g. docker compose up --scale timebridge=2).
@@ -245,4 +264,147 @@ func TestE2E_ScheduledDelivery(t *testing.T) {
 	}
 
 	assert.False(t, time.Now().Before(deliveryTime), "message was delivered before its scheduled time")
+}
+
+// TestE2E_ErrorTopic_InvalidHeaders produces a message without timebridge headers and verifies it
+// routes to the error topic — not the destination topic. Requires E2E_ERROR_TOPIC to be set.
+func TestE2E_ErrorTopic_InvalidHeaders(t *testing.T) {
+	brokerAddr, inputTopic, destTopic := e2eEnv(t)
+	errorTopic, ok := os.LookupEnv("E2E_ERROR_TOPIC")
+	if !ok {
+		t.Skip("E2E_ERROR_TOPIC not set")
+	}
+
+	runID := uuid.New().String()
+	msgKey := "e2e-error-" + runID
+
+	// Subscribe to both topics before producing
+	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers": brokerAddr,
+		"group.id":          "e2e-error-" + runID,
+		"auto.offset.reset": "earliest",
+	})
+	require.NoError(t, err)
+	defer consumer.Close()
+	require.NoError(t, consumer.Subscribe(destTopic+","+errorTopic, nil))
+
+	producer, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers": brokerAddr,
+	})
+	require.NoError(t, err)
+	defer producer.Close()
+
+	// Produce a message without any timebridge headers — invalid for the acceptor
+	require.NoError(t, producer.Produce(&kafka.Message{
+		TopicPartition: kafka.TopicPartition{Topic: &inputTopic, Partition: kafka.PartitionAny},
+		Key:            []byte(msgKey),
+		Value:          []byte(`{"test":"error-routing"}`),
+	}, nil))
+	producer.Flush(5000)
+
+	// Poll for up to 20s; collect any messages matching our key on either topic
+	deadline := time.Now().Add(20 * time.Second)
+	var arrivedOnDest, arrivedOnError bool
+	for time.Now().Before(deadline) && !(arrivedOnError) {
+		ev := consumer.Poll(500)
+		m, ok := ev.(*kafka.Message)
+		if !ok || m.TopicPartition.Error != nil || string(m.Key) != msgKey {
+			continue
+		}
+		topic := *m.TopicPartition.Topic
+		if topic == errorTopic {
+			arrivedOnError = true
+			t.Logf("message correctly routed to error topic")
+		}
+		if topic == destTopic {
+			arrivedOnDest = true
+		}
+	}
+
+	assert.True(t, arrivedOnError, "expected message on error topic %q within 20s", errorTopic)
+	assert.False(t, arrivedOnDest, "message with invalid headers must not reach destination topic")
+}
+
+// TestE2E_ScheduledOrdering produces three messages with different scheduled times in non-chronological
+// order and verifies they arrive at the destination topic in when-ascending order.
+func TestE2E_ScheduledOrdering(t *testing.T) {
+	brokerAddr, inputTopic, destTopic := e2eEnv(t)
+
+	runID := uuid.New().String()
+	now := time.Now()
+
+	// Keys encode the expected arrival rank for easy assertion
+	type msg struct {
+		key  string
+		when time.Time
+	}
+	// Produced out of when-order; should arrive in when-order: second → third → first
+	messages := []msg{
+		{key: runID + "-first", when: now.Add(10 * time.Second)},
+		{key: runID + "-second", when: now.Add(3 * time.Second)},
+		{key: runID + "-third", when: now.Add(6 * time.Second)},
+	}
+
+	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
+		"bootstrap.servers": brokerAddr,
+		"group.id":          "e2e-ordering-" + runID,
+		"auto.offset.reset": "earliest",
+	})
+	require.NoError(t, err)
+	defer consumer.Close()
+	require.NoError(t, consumer.Subscribe(destTopic, nil))
+
+	producer, err := kafka.NewProducer(&kafka.ConfigMap{
+		"bootstrap.servers": brokerAddr,
+	})
+	require.NoError(t, err)
+	defer producer.Close()
+
+	expectedKeys := make(map[string]time.Time, len(messages))
+	for _, m := range messages {
+		expectedKeys[m.key] = m.when
+		require.NoError(t, producer.Produce(&kafka.Message{
+			TopicPartition: kafka.TopicPartition{Topic: &inputTopic, Partition: kafka.PartitionAny},
+			Key:            []byte(m.key),
+			Value:          []byte(`{"test":"ordering"}`),
+			Headers: []kafka.Header{
+				{Key: "X-Timebridge-When", Value: []byte(m.when.UTC().Format(time.RFC3339))},
+				{Key: "X-Timebridge-Where", Value: []byte(destTopic)},
+			},
+		}, nil))
+	}
+	producer.Flush(5000)
+
+	// Collect arrivals in order, tracking actual arrival time
+	deadline := time.Now().Add(30 * time.Second)
+	type arrival struct {
+		key      string
+		arrivedAt time.Time
+	}
+	var arrivals []arrival
+	for len(arrivals) < len(messages) && time.Now().Before(deadline) {
+		ev := consumer.Poll(500)
+		m, ok := ev.(*kafka.Message)
+		if !ok || m.TopicPartition.Error != nil {
+			continue
+		}
+		key := string(m.Key)
+		if _, expected := expectedKeys[key]; expected {
+			arrivals = append(arrivals, arrival{key: key, arrivedAt: time.Now()})
+			t.Logf("received %s at %v (scheduled %v)", key, time.Now().Format(time.RFC3339), expectedKeys[key].Format(time.RFC3339))
+		}
+	}
+
+	require.Len(t, arrivals, len(messages), "expected all %d messages within 30s", len(messages))
+
+	// Verify arrival order matches when-ascending order
+	expectedOrder := []string{
+		runID + "-second", // when=now+3s — earliest
+		runID + "-third",  // when=now+6s
+		runID + "-first",  // when=now+10s — latest
+	}
+	for i, a := range arrivals {
+		assert.Equal(t, expectedOrder[i], a.key,
+			"arrival position %d: got %s, want %s", i, a.key, expectedOrder[i])
+	}
 }

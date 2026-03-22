@@ -21,6 +21,24 @@ export E2E_INPUT_TOPIC=timebridge
 export E2E_DEST_TOPIC=e2e-destination
 ```
 
+**Step 0 — Check clock sync (podman only):**
+
+Clock skew between the podman VM and host causes tests to fail silently (0 messages received) because Kafka rejects messages with future timestamps. Check and fix before starting the stack:
+
+```sh
+HOST_UTC=$(date -u '+%Y-%m-%d %H:%M:%S')
+VM_UTC=$(podman machine ssh "date -u '+%Y-%m-%d %H:%M:%S'" 2>/dev/null)
+echo "Host UTC : $HOST_UTC"
+echo "VM UTC   : $VM_UTC"
+```
+
+If the times differ by more than 5 seconds, sync the VM clock:
+```sh
+podman machine ssh "sudo date -u -s \"$(date -u '+%Y-%m-%d %H:%M:%S')\""
+```
+
+Then verify the sync worked (`date -u` on host and VM should match within 1–2 seconds) before proceeding.
+
 **Step 1 — Tear down any existing stack first:**
 ```sh
 docker compose down -v
@@ -75,10 +93,8 @@ docker compose down -v
 
 ## Troubleshooting
 
-**Messages silently dropped with "Broker: Invalid timestamp"**: The container VM's clock has drifted from the host (common after macOS sleep/wake with podman). Two options:
-- Sync the clock in place: `podman machine ssh "sudo date -u -s \"$(date -u '+%Y-%m-%d %H:%M:%S')\""`
-- Or restart the VM entirely: `podman machine stop && podman machine start` (also fixes the clock, slightly slower)
+**Tests timeout with 0 messages received (clock skew)**: The container VM's clock has drifted from the host — common after macOS sleep/wake with podman. Timebridge logs will show messages stored with `remains=Xm` far in the future. Run Step 0 to detect and fix, then restart from Step 1.
 
-After either fix, restart the stack from Step 1 so Kafka starts with the corrected time.
+**Messages silently dropped with "Broker: Invalid timestamp"**: Same root cause as above — clock skew. Run Step 0 and restart the stack.
 
-**Tests timeout with 0 messages received**: Check that `SCHEDULER_POLL_INTERVAL_SECONDS=1` was passed when starting timebridge (Step 4). Verify with `docker compose logs timebridge | grep "next_retry"` — it should show `next_retry=1s`.
+**Tests timeout with 0 messages received (poll interval)**: Check that `SCHEDULER_POLL_INTERVAL_SECONDS=1` was passed when starting timebridge (Step 4). Verify with `docker compose logs timebridge | grep "next_retry"` — it should show `next_retry=1s`.
