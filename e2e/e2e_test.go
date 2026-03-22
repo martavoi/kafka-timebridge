@@ -11,22 +11,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func envOrSkip(t *testing.T, key string) string {
-	t.Helper()
-	v := os.Getenv(key)
-	if v == "" {
-		t.Skipf("%s not set", key)
-	}
-	return v
-}
-
 // TestE2E_ScheduledDelivery is the primary e2e test. It produces a message to the timebridge
 // topic scheduled 5 seconds in the future and asserts the message arrives on the destination
 // topic after the scheduled time, with timebridge headers stripped.
 func TestE2E_ScheduledDelivery(t *testing.T) {
-	brokerAddr := envOrSkip(t, "E2E_BROKER")
-	inputTopic := envOrSkip(t, "E2E_INPUT_TOPIC")
-	destTopic := envOrSkip(t, "E2E_DEST_TOPIC")
+	brokerAddr, ok := os.LookupEnv("E2E_BROKER")
+	if !ok {
+		t.Skip("E2E_BROKER not set")
+	}
+	inputTopic, ok := os.LookupEnv("E2E_INPUT_TOPIC")
+	if !ok {
+		t.Skip("E2E_INPUT_TOPIC not set")
+	}
+	destTopic, ok := os.LookupEnv("E2E_DEST_TOPIC")
+	if !ok {
+		t.Skip("E2E_DEST_TOPIC not set")
+	}
 
 	runID := uuid.New().String()
 
