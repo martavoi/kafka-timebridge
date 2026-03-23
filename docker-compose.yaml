@@ -70,6 +70,7 @@ services:
       KAFKA_SECURITY_PROTOCOL: PLAINTEXT
       KAFKA_TOPIC: timebridge
       KAFKA_GROUP_ID: timebridge
+      KAFKA_ERROR_TOPIC: ${KAFKA_ERROR_TOPIC:-}
 
       # Backend Configuration (override with BACKEND=mongodb or BACKEND=couchbase)
       BACKEND: ${BACKEND:-memory}

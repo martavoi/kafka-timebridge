@@ -44,11 +44,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        backend: [memory, mongodb, couchbase]
+        include:
+          - backend: memory
+            scale: 1
+          - backend: mongodb
+            scale: 2
+          - backend: couchbase
+            scale: 2
     env:
       E2E_BROKER: localhost:9092
       E2E_INPUT_TOPIC: timebridge
       E2E_DEST_TOPIC: e2e-destination
+      E2E_ERROR_TOPIC: e2e-error
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -123,12 +130,16 @@ jobs:
           docker compose exec broker /opt/kafka/bin/kafka-topics.sh \
             --bootstrap-server localhost:9092 --create --if-not-exists \
             --topic $E2E_DEST_TOPIC --partitions 1 --replication-factor 1
+          docker compose exec broker /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server localhost:9092 --create --if-not-exists \
+            --topic $E2E_ERROR_TOPIC --partitions 1 --replication-factor 1
 
       - name: Start timebridge
         run: |
           BACKEND=${{ matrix.backend }} \
+          KAFKA_ERROR_TOPIC=$E2E_ERROR_TOPIC \
           SCHEDULER_POLL_INTERVAL_SECONDS=1 LOG_LEVEL=debug KAFKA_TOPIC=$E2E_INPUT_TOPIC \
-            docker compose up -d --build timebridge
+            docker compose up -d --build --scale timebridge=${{ matrix.scale }} timebridge
 
           # Wait for timebridge to subscribe to the input topic before tests start.
           # "Successfully subscribed" is logged at DEBUG level after Kafka consumer setup.
