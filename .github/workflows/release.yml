@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   issues: write
@@ -18,11 +22,10 @@ jobs:
   # ---------------------------------------------------------------------------
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -40,6 +43,7 @@ jobs:
   # ---------------------------------------------------------------------------
   e2e:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: test
     strategy:
       fail-fast: false
@@ -170,6 +174,7 @@ jobs:
   # ---------------------------------------------------------------------------
   semantic-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [test, e2e]
     outputs:
       version: ${{ steps.release.outputs.version }}
@@ -186,12 +191,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: npm ci
 
       - name: Run semantic-release
         id: release
@@ -220,6 +220,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-binaries:
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
     needs: semantic-release
     if: needs.semantic-release.outputs.released == 'true'
     strategy:
@@ -272,6 +273,7 @@ jobs:
   # ---------------------------------------------------------------------------
   upload-binaries:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs:
       - semantic-release
       - build-binaries
@@ -300,6 +302,7 @@ jobs:
   # ---------------------------------------------------------------------------
   docker-build:
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
     needs: semantic-release
     if: needs.semantic-release.outputs.released == 'true'
     strategy:
@@ -362,6 +365,7 @@ jobs:
   # ---------------------------------------------------------------------------
   docker-merge:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs:
       - semantic-release
       - docker-build
@@ -400,6 +404,7 @@ jobs:
   # ---------------------------------------------------------------------------
   update-release-notes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs:
       - semantic-release
       - upload-binaries

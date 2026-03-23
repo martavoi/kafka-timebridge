@@ -286,7 +286,7 @@ func TestE2E_ErrorTopic_InvalidHeaders(t *testing.T) {
 	})
 	require.NoError(t, err)
 	defer consumer.Close()
-	require.NoError(t, consumer.Subscribe(destTopic+","+errorTopic, nil))
+	require.NoError(t, consumer.SubscribeTopics([]string{destTopic, errorTopic}, nil))
 
 	producer, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers": brokerAddr,

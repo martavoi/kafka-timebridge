@@ -25,6 +25,7 @@ README.md
 # Docker
 Dockerfile*
 docker-compose*.yml
+docker-compose*.yaml
 .dockerignore
 
 # Temporary files
