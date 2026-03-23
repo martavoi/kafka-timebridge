@@ -130,6 +130,16 @@ jobs:
           SCHEDULER_POLL_INTERVAL_SECONDS=1 LOG_LEVEL=debug KAFKA_TOPIC=$E2E_INPUT_TOPIC \
             docker compose up -d --build timebridge
 
+          # Wait for timebridge to subscribe to the input topic before tests start.
+          # "Successfully subscribed" is logged at DEBUG level after Kafka consumer setup.
+          echo "Waiting for timebridge to subscribe to Kafka..."
+          for i in $(seq 1 30); do
+            docker compose logs timebridge 2>&1 | grep -q "Successfully subscribed" && break
+            sleep 1
+          done
+          docker compose logs timebridge 2>&1 | grep -q "Successfully subscribed" \
+            || { echo "ERROR: timebridge did not subscribe within 30s"; docker compose logs timebridge; exit 1; }
+
       - name: Run e2e tests
         run: CGO_ENABLED=1 go test -v -timeout 120s -count=1 ./e2e/
 
