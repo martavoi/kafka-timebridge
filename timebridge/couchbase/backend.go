@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"kafka-timebridge/timebridge"
+	"sort"
 	"time"
 
 	"github.com/couchbase/gocb/v2"
@@ -115,7 +116,7 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 	queryTimeout := time.Duration(s.cfg.QueryTimeout) * time.Second
 
 	// Single atomic UPDATE...RETURNING: claim and retrieve in one round-trip.
-	// ORDER BY `when` ASC with LIMIT is served by timebridge_when_claimed_idx.
+	// Rows are sorted by When ASC in Go after decoding (ORDER BY is not valid in N1QL UPDATE).
 	// RETURNING only reflects documents actually mutated — concurrent instances
 	// that lose the per-document CAS race are excluded automatically.
 	rows, err := s.cluster.Query(
@@ -123,7 +124,7 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 			"UPDATE %s "+
 				"SET claimed_until = $claimedUntil, claimed_by = $claimToken "+
 				"WHERE `when` <= $now AND claimed_until <= $now "+
-				"ORDER BY `when` ASC LIMIT $limit "+
+				"LIMIT $limit "+
 				"RETURNING META().id AS id, `key`, `value`, `headers`, `when`, `where`",
 			keyspace),
 		&gocb.QueryOptions{
@@ -169,6 +170,10 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 			Key: row.Id,
 		})
 	}
+
+	sort.Slice(docs, func(i, j int) bool {
+		return docs[i].Message.When.Before(docs[j].Message.When)
+	})
 
 	return docs, rows.Err()
 }
