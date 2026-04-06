@@ -172,7 +172,7 @@ func (s *Backend) ReadBatch(ctx context.Context, limit int) ([]timebridge.Stored
 	}
 
 	sort.Slice(docs, func(i, j int) bool {
-		return docs[i].Message.When.Before(docs[j].Message.When)
+		return docs[i].When.Before(docs[j].When)
 	})
 
 	return docs, rows.Err()
