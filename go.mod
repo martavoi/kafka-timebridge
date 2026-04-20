@@ -4,13 +4,13 @@ go 1.26
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3
-	github.com/confluentinc/confluent-kafka-go/v2 v2.14.0
+	github.com/confluentinc/confluent-kafka-go/v2 v2.14.1
 	github.com/couchbase/gocb/v2 v2.12.1
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	go.mongodb.org/mongo-driver/v2 v2.5.0
+	go.mongodb.org/mongo-driver/v2 v2.5.1
 )
 
 require (
