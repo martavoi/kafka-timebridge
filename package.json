@@ -9,11 +9,11 @@
   "license": "Apache-2.0",
   "private": true,
   "devDependencies": {
-    "@commitlint/cli": "^20.5.0",
-    "@commitlint/config-conventional": "^20.5.0",
+    "@commitlint/cli": "^21.0.0",
+    "@commitlint/config-conventional": "^21.0.0",
     "@semantic-release/commit-analyzer": "^13.0.1",
-    "@semantic-release/github": "^12.0.6",
-    "@semantic-release/release-notes-generator": "^14.1.0",
+    "@semantic-release/github": "^12.0.8",
+    "@semantic-release/release-notes-generator": "^14.1.1",
     "conventional-changelog-conventionalcommits": "^9.3.1",
     "semantic-release": "^25.0.3"
   }
