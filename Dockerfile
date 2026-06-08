@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.26.1-alpine3.23 AS builder
+FROM golang:1.26.4-alpine3.23 AS builder
 
 # Install build dependencies (librdkafka is compiled from source bundled in the module)
 RUN apk add --no-progress --no-cache gcc musl-dev
