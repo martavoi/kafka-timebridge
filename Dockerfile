@@ -23,7 +23,7 @@ ARG VERSION=dev
 RUN go build -tags musl -ldflags "-s -w -X main.version=${VERSION}" -o kafka-timebridge ./cmd
 
 # Final stage
-FROM alpine:3.23
+FROM alpine:3.24
 
 LABEL org.opencontainers.image.source="https://github.com/martavoi/kafka-timebridge"
 LABEL org.opencontainers.image.description="Kafka Timebridge — daemon for delayed Kafka delivery: consumes a scheduling topic, persists messages, and produces to destination topics at the configured time (memory, Couchbase, or MongoDB)"
